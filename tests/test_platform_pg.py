@@ -154,7 +154,9 @@ def test_concurrent_oversell_never_negative(login, admin_conn):
 
     def go(client):
         barrier.wait(10)
-        results.append(client.post('/v1/transactions/sell-in', json=_sale(21, 2, qty, '45000')))
+        body = _sale(21, 2, qty, '45000')
+        body.pop('occurred_at')  # server clock after lock
+        results.append(client.post('/v1/transactions/sell-in', json=body))
     ts = [threading.Thread(target=go, args=(c,)) for c in (c1, c2)]
     [t.start() for t in ts]
     [t.join() for t in ts]
@@ -211,23 +213,29 @@ def test_reversal_restores_stock_and_revenue(login, admin_conn):
 
 
 def test_backdate_rules_and_audited_correction(login, admin_conn):
+    # Times are anchored after the latest ledger movement of the holders involved (template age varies).
+    last = admin_conn.execute("""SELECT max(occurred_at) FROM telco.stock_ledger WHERE product_id=3 AND account_id IN
+        ((SELECT id FROM telco.stock_account WHERE sales_id=5),(SELECT id FROM telco.stock_account WHERE outlet_id=41))""").fetchone()[0]
+    admin_conn.rollback()
+    base = max(last + timedelta(seconds=1), datetime.now(timezone.utc) - timedelta(seconds=100))
+    at = lambda s: (base + timedelta(seconds=s)).isoformat()  # noqa: E731
     s5 = login('sls-005')
-    r = s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 5, '10800', at=now_iso(-120)))
+    r = s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 5, '10800', at=at(0)))
     assert r.status_code == 200, r.text
-    assert s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 1, '10800', at=now_iso(-60))).status_code == 200
+    assert s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 1, '10800', at=at(40))).status_code == 200
     assert err(s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 1, '10800', at=now_iso(-3 * 86400)))) == 'BACKDATE_REJECTED'
     assert err(s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 1, '10800', at='2026-09-15T10:00:00+07:00'))) == 'BACKDATE_REJECTED'
     # Earlier than the latest ledger movement of this holder/SKU (inside grace): still rejected on the normal path.
-    assert err(s5.post('/v1/transactions/sell-out', json={**_sale(41, 3, 1, '12000', at=now_iso(-600)), 'customer_token': 'SYN-TEST-1'})) == 'BACKDATE_REJECTED'
+    assert err(s5.post('/v1/transactions/sell-out', json={**_sale(41, 3, 1, '12000', at=at(20)), 'customer_token': 'SYN-TEST-1'})) == 'BACKDATE_REJECTED'
     spv = login(spv_for_outlet(admin_conn, 41))
     bad = spv.post('/v1/corrections/backdated-sale', json={'channel': 'sell_out', 'external_key': 'TEST-CORR-' + uuid.uuid4().hex[:8], 'outlet_id': 41,
-                                                           'product_id': 3, 'quantity': 3, 'unit_price': '12000', 'occurred_at': now_iso(-150),
+                                                           'product_id': 3, 'quantity': 3, 'unit_price': '12000', 'occurred_at': at(-1),
                                                            'customer_token': 'SYN-TEST-CORR', 'reason': 'Koreksi tes: transaksi sebelum stok tiba'})
     assert bad.status_code == 422 and err(bad) == 'HISTORICAL_STOCK_NEGATIVE'
     admin_conn.rollback()
     assert admin_conn.execute("SELECT count(*) FROM telco.sell_out WHERE customer_token='SYN-TEST-CORR'").fetchone()[0] == 0
     good = spv.post('/v1/corrections/backdated-sale', json={'channel': 'sell_out', 'external_key': 'TEST-CORR-' + uuid.uuid4().hex[:8], 'outlet_id': 41,
-                                                            'product_id': 3, 'quantity': 2, 'unit_price': '12000', 'occurred_at': now_iso(-90),
+                                                            'product_id': 3, 'quantity': 2, 'unit_price': '12000', 'occurred_at': at(20),
                                                             'customer_token': 'SYN-TEST-CORR2', 'reason': 'Koreksi tes: input terlambat sah'})
     assert good.status_code == 200, good.text
     assert admin_conn.execute('SELECT count(*) FROM telco.correction_audit').fetchone()[0] >= 1

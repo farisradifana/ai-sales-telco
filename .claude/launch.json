@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "api", "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe", "runtimeArgs": ["scripts/run_api_local.sh"], "port": 8000 },
+    { "name": "dashboard", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "dashboard", "run", "dev"], "port": 5173 }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "source": "telco_test_jatim_clean",
+  "restored_to": "telco_test_restore_20261016160834",
+  "dump_seconds": 4,
+  "restore_seconds": 34,
+  "dump_bytes": 13696229,
+  "fingerprints_equal": true,
+  "source_fp": {
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ledger": 700072,
+    "balance_sum_pcs": 12000.0,
+    "revenue_sell_out": 26014113500.0,
+    "districts": 666,
+    "migrations": "001_core.sql:c52871d5e881,002_analytics.sql:ba13a441111d,003_reporting.sql:f10cb9b97683,004_access.sql:dec8667d3c02,005_platform.sql:3dabe6f16c43,006_platform_ids.sql:0b1b80ac93e1,007_lock_helper.sql:49131b82bd11",
+    "grants": 1454,
+    "wa_identities": 50,
+    "sell_out_md5": "d6155bab3b40271c97432a93c646c630"
+  },
+  "restored_fp": {
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ledger": 700072,
+    "balance_sum_pcs": 12000.0,
+    "revenue_sell_out": 26014113500.0,
+    "districts": 666,
+    "migrations": "001_core.sql:c52871d5e881,002_analytics.sql:ba13a441111d,003_reporting.sql:f10cb9b97683,004_access.sql:dec8667d3c02,005_platform.sql:3dabe6f16c43,006_platform_ids.sql:0b1b80ac93e1,007_lock_helper.sql:49131b82bd11",
+    "grants": 1454,
+    "wa_identities": 50,
+    "sell_out_md5": "d6155bab3b40271c97432a93c646c630"
+  },
+  "sql_audits": "validate.sql + validate_platform.sql passed on restored copy",
+  "scope": "Local logical backup drill on PostgreSQL 17.11. NOT a cloud PITR/RPO/RTO proof."
+}

@@ -1,0 +1,11 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.1, pytest-9.1.1, pluggy-1.7.0 -- F:\ai-sales-telco\.venv\Scripts\python.exe
+rootdir: F:\ai-sales-telco
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 2 items
+
+tests/test_postgres.py::PostgreSQLTests::test_concurrent_oversell_exactly_one_succeeds PASSED [ 50%]
+tests/test_postgres.py::PostgreSQLTests::test_followup_isolation_version_and_expiry PASSED [100%]
+
+============================== 2 passed in 1.23s ==============================

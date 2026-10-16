@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "checks": {
+    "summary_has_confirmation_code": true,
+    "confirm_posted": true,
+    "insight_from_hermes": true,
+    "insight_numbers_from_evidence": true,
+    "follow_up_preserves_context": true,
+    "duplicate_ignored": true,
+    "only_non_routable_recipients": true,
+    "all_events_completed": true
+  },
+  "steps": [
+    {
+      "step": "sale_draft",
+      "message_id": "wamid.E2E.c3d368ac405b4bed92efd7fdb5909496",
+      "reply": "Konfirmasi SELL-IN OUT-0001 (Outlet Fiktif 0001), tanggal 2026-10-16, jam posting = saat konfirmasi (WIB):\n1. SIM-NOVA-8 x2 pcs @Rp22.500 = Rp45.000\nTotal omzet Rp45.000 (fisik 2 pcs; saldo Rp0 nominal — satuan tidak dijumlahkan).\nBalas YA 1EDA7B untuk posting atau BATAL 1EDA7B untuk membatalkan. Berlaku 30 menit.",
+      "to_prefix": "0099",
+      "event_state": "completed",
+      "narrative_source": null,
+      "seconds": 27.9
+    },
+    {
+      "step": "sale_confirm",
+      "message_id": "wamid.E2E.3992a77e266d4af1b01c3578e1d7c24b",
+      "reply": "Tercatat:\n- SIM-NOVA-8 x2 → #1000000007 (45000.00 IDR)\nTotal 45000.00 IDR.",
+      "to_prefix": "0099",
+      "event_state": "completed",
+      "narrative_source": null,
+      "seconds": 67.1
+    },
+    {
+      "step": "insight",
+      "message_id": "wamid.E2E.2def6aebd98b41e1871366b077bd4fa6",
+      "reply": "Dalam September 2026 vs Juni 2026 (masing-masing 30 hari, WIB, akhir eksklusif 1 Oktober 2026), sell-out Outlet Fiktif 0001 (OUT-0001) berubah -Rp5.173.100 (-70,55%): Rp7.332.900 → Rp2.159.800.\nKontribusi terbesar SKU Voucher Fiktif Nova 8GB 30 Hari -Rp1.870.000; volume Rp0, harga/mix Rp0, masuk/keluar -Rp1.870.000 (dekomposisi akuntansi, bukan sebab).\nKunjungan tercatat 0 dari 8 rencana; ini asosiasi, bukan bukti sebab.\nSaran: Jadwalkan kunjungan verifikasi outlet dan tanyakan kendala; uji pemulihan kunjungan pada outlet pembanding. (pemilik: Sales Supervisor, tinjau 7 hari; ukuran: Visit completion >= 80%; compare sell-out/day vs matched controls).\nBatas bukti: stockout tidak diukur, data kompetitor/jaringan tidak tersedia; tindakan perlu konfirmasi manusia.\nEvidence ID 61b43aa7-80ec-44fa-82b6-28316b8a5490.\nGrafik (tautan privat, berlaku terbatas): http://127.0.0.1:8000/charts/61b43aa7-80ec-44fa-82b6-28316b8a5490.svg?exp=1792145325&sig=c16f8c45b75c1c7cc7f8efcadb848d7b2338e27fae78e92d0076a4a12ef968a1",
+      "to_prefix": "0099",
+      "event_state": "completed",
+      "narrative_source": "hermes",
+      "seconds": 106.3
+    },
+    {
+      "step": "follow_up",
+      "message_id": "wamid.E2E.cdf3b3e8a10c438ca4611c2c73592bbc",
+      "reply": "Konteks tetap: sell-out Outlet Fiktif 0001 (OUT-0001), September 2026 vs Juni 2026.\n1. Jadwalkan kunjungan verifikasi outlet dan tanyakan kendala; uji pemulihan kunjungan pada outlet pembanding. Fakta: Kunjungan tercatat 0 dari 8 rencana pada periode current. Hipotesis: Kunjungan yang tidak terlaksana berasosiasi dengan penurunan; kausalitas belum terbukti. Pemilik: Sales Supervisor. Tinjau: 7 hari. Sukses: Visit completion >= 80%; compare sell-out/day vs matched controls. Guardrail: Bandingkan dengan outlet kontrol sepadan; jangan menambah diskon.\n2. Audit volume dan harga efektif SKU dengan kontribusi negatif terbesar; cek ketersediaan fisik dan permintaan sebelum mengubah stok/harga. Fakta: SKU Voucher Fiktif Nova 8GB 30 Hari berubah -1870000.00 IDR (volume 0.00, harga/mix 0.00, masuk/keluar -1870000.00). Hipotesis: Permintaan, input, harga efektif atau ketersediaan SKU ini berubah; perlu dicek di lapangan. Pemilik: Sales + Trade Marketing. Tinjau: 7 hari. Sukses: SKU net revenue/day and effective price; guardrail discount cost. Guardrail: Cek kebutuhan dan ketersediaan sebelum reorder; batasi biaya diskon.\nSemua tindakan adalah rencana; eksekusi stok/harga/kampanye butuh konfirmasi manusia.\nEvidence ID 61b43aa7-80ec-44fa-82b6-28316b8a5490.",
+      "to_prefix": "0099",
+      "event_state": "completed",
+      "narrative_source": null,
+      "seconds": 146.4
+    }
+  ],
+  "duplicate": {
+    "status": 200,
+    "body": {
+      "status": "received",
+      "accepted": 0,
+      "duplicate": 1,
+      "statuses": 0,
+      "unregistered": 0
+    },
+    "extra_replies": 0
+  },
+  "path": "signed webhook -> API ingress -> outbox -> n8n (regular mode) -> API steps -> Hermes 0.20.5 -> MCP bridge -> API tools -> PostgreSQL 17.11 -> outbox -> mock WhatsApp Graph"
+}

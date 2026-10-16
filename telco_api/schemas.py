@@ -125,7 +125,7 @@ class DirectSale(Strict):
     quantity: StrictInt = Field(ge=1, le=100_000_000)
     unit_price: MoneyStr
     discount_idr: MoneyStr = '0'
-    occurred_at: AwareDatetime
+    occurred_at: AwareDatetime | None = None  # omitted -> DB clock after locks (recommended)
     customer_token: Annotated[str, StringConstraints(pattern=r'^SYN-[A-Z0-9-]{3,40}$')] | None = None
     client_confirmation_id: Annotated[str, StringConstraints(min_length=6, max_length=160)]
 

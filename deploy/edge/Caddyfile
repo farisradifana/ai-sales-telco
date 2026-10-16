@@ -1,0 +1,30 @@
+{$PUBLIC_HOSTNAME} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	# Meta WhatsApp Cloud API webhook (GET challenge + signed POST). Body size bounded; signature checked by the API.
+	handle /webhooks/whatsapp {
+		request_body {
+			max_size 256KB
+		}
+		reverse_proxy api:8000
+	}
+	handle /charts/* {
+		reverse_proxy api:8000
+	}
+	# Health for external uptime checks: liveness only (readiness stays private).
+	handle /health/live {
+		reverse_proxy api:8000
+	}
+	# Internal n8n/MCP endpoints are never routed publicly.
+	handle /internal/* {
+		respond 404
+	}
+	handle {
+		reverse_proxy dashboard:8080
+	}
+}

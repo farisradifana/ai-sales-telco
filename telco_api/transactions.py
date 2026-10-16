@@ -55,6 +55,9 @@ def normalize_draft(conn, s, p: Principal, req: DraftRequest) -> dict:
     if not o:
         raise errors.denied()  # do not reveal whether the outlet exists
     authz.require(conn, p, 'outlet', o[0])
+    # Without an explicit client timestamp the posting time is taken from the DB clock AFTER the holder locks are held
+    # (post_normalized), so concurrent or later-confirmed drafts never look "backdated" relative to each other.
+    explicit = req.occurred_at is not None
     occurred_at = (req.occurred_at or _now()).astimezone(timezone.utc)
     check_posting_window(conn, s, req.channel, occurred_at)
     day = occurred_at.astimezone(WIB).date()
@@ -88,13 +91,15 @@ def normalize_draft(conn, s, p: Principal, req: DraftRequest) -> dict:
         lines.append({'line': i, 'product_id': pr[0], 'sku': pr[1], 'product': pr[2], 'stock_unit': pr[3], 'category': pr[4],
                       'quantity': qty, 'unit_price': price, 'discount_idr': disc, 'net_revenue_idr': gross - disc})
     return {'channel': req.channel, 'outlet_id': o[0], 'outlet_code': o[1], 'outlet_name': o[2], 'sales_id': p.sales_id,
-            'assignment_id': a[0], 'occurred_at': occurred_at.isoformat(), 'customer_token': req.customer_token, 'lines': lines}
+            'assignment_id': a[0], 'occurred_at': occurred_at.isoformat() if explicit else None,
+            'business_day': day.isoformat(), 'customer_token': req.customer_token, 'lines': lines}
 
 
 def summary_text(n: dict, code: str, ttl_min: int) -> str:
     ch = 'SELL-IN' if n['channel'] == 'sell_in' else 'SELL-OUT'
-    t = datetime.fromisoformat(n['occurred_at']).astimezone(WIB)
-    out = [f"Konfirmasi {ch} {n['outlet_code']} ({n['outlet_name']}), {t:%d-%m-%Y %H:%M} WIB:"]
+    when = (f"{datetime.fromisoformat(n['occurred_at']).astimezone(WIB):%d-%m-%Y %H:%M} WIB" if n.get('occurred_at')
+            else f"tanggal {n['business_day']}, jam posting = saat konfirmasi (WIB)")
+    out = [f"Konfirmasi {ch} {n['outlet_code']} ({n['outlet_name']}), {when}:"]
     pcs, saldo, total = Decimal(0), Decimal(0), Decimal(0)
     for ln in n['lines']:
         q = dec(ln['quantity'])
@@ -147,9 +152,12 @@ def _existing(conn, channel: str, key: str, h: str):
 
 def post_normalized(conn, s, p: Principal, n: dict, key_prefix: str, *, correction: CorrectionRequest | None = None) -> list[dict]:
     """Post every line of a normalized draft in the CURRENT transaction (caller commits once)."""
-    occurred_at = datetime.fromisoformat(n['occurred_at'])
-    check_posting_window(conn, s, n['channel'], occurred_at, correction=correction is not None)
     accts = _lock_accounts(conn, n)
+    occurred_at = (datetime.fromisoformat(n['occurred_at']) if n.get('occurred_at')
+                   else conn.execute('SELECT clock_timestamp()').fetchone()[0])
+    check_posting_window(conn, s, n['channel'], occurred_at, correction=correction is not None)
+    if n.get('business_day') and occurred_at.astimezone(WIB).date().isoformat() != n['business_day']:
+        raise errors.unprocessable('BUSINESS_DAY_CHANGED', 'Draft dibuat pada tanggal WIB lain; kirim ulang data penjualan hari ini.')
     results = []
     for ln in n['lines']:
         key = f"{key_prefix}-{ln['line']}" if correction is None else correction.external_key
@@ -188,6 +196,7 @@ def post_normalized(conn, s, p: Principal, n: dict, key_prefix: str, *, correcti
             code = 'INVALID_ASSIGNMENT' if 'assignment' in msg else 'OUTLET_CLOSED' if 'outlet' in msg else 'POSTING_REJECTED'
             raise errors.unprocessable(code, 'Transaksi ditolak aturan posting: ' + msg)
         res = {'channel': n['channel'], 'transaction_id': tx_id, 'external_key': key, 'sku': ln['sku'],
+               'occurred_at': occurred_at.isoformat(),
                'quantity': str(ln['quantity']), 'stock_unit': ln['stock_unit'], 'net_revenue_idr': str(net)}
         if correction is not None:
             for acct in accts['ids']:
