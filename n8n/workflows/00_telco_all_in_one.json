@@ -1,0 +1,1436 @@
+{
+  "id": "telco00allinone01",
+  "name": "TELCO 00 — Semua alur (satu tampilan)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "router-0",
+      "name": "Inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        80,
+        110
+      ],
+      "webhookId": "telco-inbound",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoDispatchHeader",
+          "name": "TELCO dispatch header"
+        }
+      },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telco-inbound",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "responseCode": 202,
+        "options": {}
+      }
+    },
+    {
+      "id": "router-1",
+      "name": "Event",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        110
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p",
+              "name": "provider",
+              "type": "string",
+              "value": "={{ $json.body.provider }}"
+            },
+            {
+              "id": "m",
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $json.body.message_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "router-2",
+      "name": "Claim",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        110
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "router-3",
+      "name": "Claimed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        110
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "claimed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "router-4",
+      "name": "Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        110
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/intent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "router-5",
+      "name": "Ref",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1180,
+        110
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p",
+              "name": "provider",
+              "type": "string",
+              "value": "={{ $('Event').first().json.provider }}"
+            },
+            {
+              "id": "m",
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $('Event').first().json.message_id }}"
+            },
+            {
+              "id": "i",
+              "name": "intent",
+              "type": "string",
+              "value": "={{ $json.name }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "router-6",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1400,
+        110
+      ],
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 4,
+        "output": "={{ ({sales_input:0, confirm:0, cancel:0, insight:1, follow_up:2})[$json.intent] ?? 3 }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "note-router",
+      "name": "Catatan 01 · Pesan masuk WhatsApp (router)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        0
+      ],
+      "parameters": {
+        "content": "## 01 · Pesan masuk WhatsApp (router)\nEvent dari API ingress (signature sudah diverifikasi) → klaim → kenali niat → arahkan ke jalur di bawah. Hanya provider + message_id yang lewat; akun pengirim ditentukan API.",
+        "color": 5,
+        "width": 1660,
+        "height": 240
+      }
+    },
+    {
+      "id": "sales-0",
+      "name": "Sales · Act",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        370
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/act",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "sales-1",
+      "name": "Sales · Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        370
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "sales-2",
+      "name": "Sales · Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        370
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "note-sales",
+      "name": "Catatan 02 · Input penjualan",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        260
+      ],
+      "parameters": {
+        "content": "## 02 · Input penjualan\nDraft penjualan → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.",
+        "color": 4,
+        "width": 780,
+        "height": 240
+      }
+    },
+    {
+      "id": "insight-0",
+      "name": "Insight · Act (scoped tool)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        630
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/act",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "insight-1",
+      "name": "Insight · Narrate (Hermes)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        630
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/narrate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "insight-2",
+      "name": "Insight · Reply (+signed chart)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        630
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "insight-3",
+      "name": "Insight · Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        630
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "note-insight",
+      "name": "Catatan 03 · Insight omzet (AI)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        520
+      ],
+      "parameters": {
+        "content": "## 03 · Insight omzet (AI)\nTool analitik terotorisasi → narasi Hermes dari evidence → balasan + tautan grafik bertanda tangan.",
+        "color": 6,
+        "width": 1000,
+        "height": 240
+      }
+    },
+    {
+      "id": "follow-0",
+      "name": "Follow-up · Act (context)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        890
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/act",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "follow-1",
+      "name": "Follow-up · Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        890
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "follow-2",
+      "name": "Follow-up · Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        890
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "note-follow",
+      "name": "Catatan 04 · Follow-up \"apa yang harus dilakukan?\"",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        780
+      ],
+      "parameters": {
+        "content": "## 04 · Follow-up \"apa yang harus dilakukan?\"\nPakai konteks tersimpan (outlet/channel/periode sama), cek izin ulang, hitung ulang bila data berubah.",
+        "color": 2,
+        "width": 780,
+        "height": 240
+      }
+    },
+    {
+      "id": "other-0",
+      "name": "Lainnya · Act",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        1150
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/act",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "other-1",
+      "name": "Lainnya · Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        1150
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "other-2",
+      "name": "Lainnya · Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        1150
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "note-other",
+      "name": "Catatan 01b · Perintah lain (stok, target, peringkat, opt-in)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        1040
+      ],
+      "parameters": {
+        "content": "## 01b · Perintah lain (stok, target, peringkat, opt-in)\nStok yang dipegang, target harian, peringkat kecamatan/kab-kota, STOP/MULAI TARGET.",
+        "color": 7,
+        "width": 780,
+        "height": 240
+      }
+    },
+    {
+      "id": "target-0",
+      "name": "Target · Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        1410
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 7-20 * * 1-6"
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "target-1",
+      "name": "Target · Run nudges",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        1410
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/targets/nudges",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \"{}\" }}"
+      }
+    },
+    {
+      "id": "note-target",
+      "name": "Catatan 05 · Pengingat target harian (NONAKTIF)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        1300
+      ],
+      "parameters": {
+        "content": "## 05 · Pengingat target harian (NONAKTIF)\nJam kerja WIB, hanya yang opt-in, sekali per hari. Aktifkan setelah template WhatsApp Utility disetujui Meta.",
+        "color": 1,
+        "width": 560,
+        "height": 240
+      }
+    },
+    {
+      "id": "outbox-0",
+      "name": "Outbox · Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        1670
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "outbox-1",
+      "name": "Outbox · Dispatch batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        1670
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/outbox/dispatch",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ limit: 20, lease_seconds: 60, worker_id: \"n8n-\" + $execution.id }) }}"
+      }
+    },
+    {
+      "id": "note-outbox",
+      "name": "Catatan 06 · Pengirim pesan keluar (outbox)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        1560
+      ],
+      "parameters": {
+        "content": "## 06 · Pengirim pesan keluar (outbox)\nTiap 20 detik: ambil antrean (SKIP LOCKED + lease), kirim, retry bertahap, dead-letter bila gagal permanen.",
+        "color": 3,
+        "width": 560,
+        "height": 240
+      }
+    },
+    {
+      "id": "recap-0",
+      "name": "Rekap · Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        1930
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 6 * * *"
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "recap-1",
+      "name": "Rekap · Recap params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        1930
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s",
+              "name": "scope",
+              "type": "string",
+              "value": "province"
+            },
+            {
+              "id": "e",
+              "name": "entity_id",
+              "type": "number",
+              "value": 1
+            },
+            {
+              "id": "c",
+              "name": "channel",
+              "type": "string",
+              "value": "sell_out"
+            },
+            {
+              "id": "a",
+              "name": "start",
+              "type": "string",
+              "value": "={{ $now.setZone('Asia/Jakarta').minus({days: 30}).toISODate() }}"
+            },
+            {
+              "id": "b",
+              "name": "end",
+              "type": "string",
+              "value": "={{ $now.setZone('Asia/Jakarta').toISODate() }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "recap-2",
+      "name": "Rekap · Export CSV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        1930
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoRecapJwt",
+          "name": "TELCO recap principal JWT"
+        }
+      },
+      "parameters": {
+        "method": "GET",
+        "url": "http://api:8000/v1/exports/sales.csv",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            },
+            {
+              "name": "entity_id",
+              "value": "={{ $json.entity_id }}"
+            },
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            },
+            {
+              "name": "start",
+              "value": "={{ $json.start }}"
+            },
+            {
+              "name": "end",
+              "value": "={{ $json.end }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "csv"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "recap-3",
+      "name": "Rekap · Clear Rekap tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        740,
+        1930
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Rekap"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": false
+      }
+    },
+    {
+      "id": "recap-4",
+      "name": "Rekap · CSV to rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1930
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\nconst text = $('Rekap · Export CSV').first().json.csv || '';\nconst lines = text.split('\\n').filter(l => l.length);\nconst meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\nconst data = lines.filter(l => !l.startsWith('# '));\nconst header = data.shift().split(',');\nconst rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\nreturn [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];"
+      }
+    },
+    {
+      "id": "recap-5",
+      "name": "Rekap · Write Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1180,
+        1930
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Rekap"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "note-recap",
+      "name": "Catatan 07 · Rekap Google Sheet (NONAKTIF)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        1820
+      ],
+      "parameters": {
+        "content": "## 07 · Rekap Google Sheet (NONAKTIF)\nExport snapshot ter-scope (watermark, channel, satuan, total) → tab Rekap. Aktifkan setelah credential Google di-bind.",
+        "color": 4,
+        "width": 1440,
+        "height": 240
+      }
+    },
+    {
+      "id": "import-0",
+      "name": "Import · Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        80,
+        2190
+      ],
+      "webhookId": "telco-import",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoAdminJwt",
+          "name": "TELCO admin principal JWT"
+        }
+      },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telco-import",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {
+          "binaryPropertyName": "file"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "import-1",
+      "name": "Import · Stage import",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        2190
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoAdminJwt",
+          "name": "TELCO admin principal JWT"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/v1/imports",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "note-import",
+      "name": "Catatan 08 · Import CSV → staging (NONAKTIF)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        2080
+      ],
+      "parameters": {
+        "content": "## 08 · Import CSV → staging (NONAKTIF)\nUpload CSV admin → validasi & preview di API; posting hanya setelah konfirmasi admin di dashboard.",
+        "color": 2,
+        "width": 560,
+        "height": 240
+      }
+    }
+  ],
+  "connections": {
+    "Inbound": {
+      "main": [
+        [
+          {
+            "node": "Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event": {
+      "main": [
+        [
+          {
+            "node": "Claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim": {
+      "main": [
+        [
+          {
+            "node": "Claimed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claimed?": {
+      "main": [
+        [
+          {
+            "node": "Intent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Intent": {
+      "main": [
+        [
+          {
+            "node": "Ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ref": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Sales · Act",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insight · Act (scoped tool)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow-up · Act (context)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lainnya · Act",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sales · Act": {
+      "main": [
+        [
+          {
+            "node": "Sales · Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sales · Reply": {
+      "main": [
+        [
+          {
+            "node": "Sales · Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insight · Act (scoped tool)": {
+      "main": [
+        [
+          {
+            "node": "Insight · Narrate (Hermes)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insight · Narrate (Hermes)": {
+      "main": [
+        [
+          {
+            "node": "Insight · Reply (+signed chart)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insight · Reply (+signed chart)": {
+      "main": [
+        [
+          {
+            "node": "Insight · Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up · Act (context)": {
+      "main": [
+        [
+          {
+            "node": "Follow-up · Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up · Reply": {
+      "main": [
+        [
+          {
+            "node": "Follow-up · Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lainnya · Act": {
+      "main": [
+        [
+          {
+            "node": "Lainnya · Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lainnya · Reply": {
+      "main": [
+        [
+          {
+            "node": "Lainnya · Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Target · Schedule": {
+      "main": [
+        [
+          {
+            "node": "Target · Run nudges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outbox · Schedule": {
+      "main": [
+        [
+          {
+            "node": "Outbox · Dispatch batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · Schedule": {
+      "main": [
+        [
+          {
+            "node": "Rekap · Recap params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · Recap params": {
+      "main": [
+        [
+          {
+            "node": "Rekap · Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · Export CSV": {
+      "main": [
+        [
+          {
+            "node": "Rekap · Clear Rekap tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · Clear Rekap tab": {
+      "main": [
+        [
+          {
+            "node": "Rekap · CSV to rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · CSV to rows": {
+      "main": [
+        [
+          {
+            "node": "Rekap · Write Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import · Upload": {
+      "main": [
+        [
+          {
+            "node": "Import · Stage import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "telcoGeneratedBy": "n8n/build_workflows.py"
+  }
+}

@@ -140,8 +140,8 @@ def build(api: str) -> dict:
          'parameters': {'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 30 6 * * *'}]}}},
         {'id': 'params', 'name': 'Recap params', 'type': 'n8n-nodes-base.set', 'typeVersion': 3.4, 'position': [220, 0],
          'parameters': {'mode': 'manual', 'includeOtherFields': False, 'assignments': {'assignments': [
-             {'id': 's', 'name': 'scope', 'type': 'string', 'value': 'district'},
-             {'id': 'e', 'name': 'entity_id', 'type': 'number', 'value': 1},
+             {'id': 's', 'name': 'scope', 'type': 'string', 'value': 'province'},
+             {'id': 'e', 'name': 'entity_id', 'type': 'number', 'value': 1},  # Provinsi Jawa Timur
              {'id': 'c', 'name': 'channel', 'type': 'string', 'value': 'sell_out'},
              {'id': 'a', 'name': 'start', 'type': 'string', 'value': "={{ $now.setZone('Asia/Jakarta').minus({days: 30}).toISODate() }}"},
              {'id': 'b', 'name': 'end', 'type': 'string', 'value': "={{ $now.setZone('Asia/Jakarta').toISODate() }}"}]}, 'options': {}}},
@@ -150,10 +150,16 @@ def build(api: str) -> dict:
                         'genericAuthType': 'httpHeaderAuth', 'sendQuery': True, 'specifyQuery': 'keypair',
                         'queryParameters': {'parameters': [{'name': k, 'value': '={{ $json.%s }}' % k} for k in ('scope', 'entity_id', 'channel', 'start', 'end')]},
                         'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'csv'}}, 'timeout': 60000}}},
+        # Overwrite, not accumulate: the tab always holds exactly one snapshot (with its watermark/total metadata).
+        {'id': 'clear', 'name': 'Clear Rekap tab', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [660, -160],
+         'credentials': CRED['sheets'], 'executeOnce': True,
+         'parameters': {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'clear',
+                        'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
+                        'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Rekap'}, 'clear': 'wholeSheet', 'keepFirstRow': False}},
         {'id': 'rows', 'name': 'CSV to rows', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [660, 0],
          'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems', 'jsCode': (
              "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\n"
-             "const text = $input.first().json.csv || '';\n"
+             "const text = $('Export CSV').first().json.csv || '';\n"
              "const lines = text.split('\\n').filter(l => l.length);\n"
              "const meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\n"
              "const data = lines.filter(l => !l.startsWith('# '));\n"
@@ -169,7 +175,7 @@ def build(api: str) -> dict:
                         'options': {}}},
     ]
     out['07_spreadsheet_recap'] = wf('telco07recap000001', 'TELCO 07 Spreadsheet recap (export snapshot)', recap_nodes,
-                                     chain(['Schedule', 'Recap params', 'Export CSV', 'CSV to rows', 'Write Google Sheet']))
+                                     chain(['Schedule', 'Recap params', 'Export CSV', 'Clear Rekap tab', 'CSV to rows', 'Write Google Sheet']))
 
     # 08: admin uploads a recap CSV -> API staging (hash, validation, preview). Posting needs admin confirm in dashboard.
     imp_nodes = [
@@ -187,14 +193,95 @@ def build(api: str) -> dict:
     return out
 
 
+LANES = [  # key, title, description, sticky color (n8n 1..7), active by default
+    ('router', '01 · Pesan masuk WhatsApp (router)',
+     'Event dari API ingress (signature sudah diverifikasi) → klaim → kenali niat → arahkan ke jalur di bawah. '
+     'Hanya provider + message_id yang lewat; akun pengirim ditentukan API.', 5, True),
+    ('sales', '02 · Input penjualan',
+     'Draft penjualan → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.', 4, True),
+    ('insight', '03 · Insight omzet (AI)',
+     'Tool analitik terotorisasi → narasi Hermes dari evidence → balasan + tautan grafik bertanda tangan.', 6, True),
+    ('follow', '04 · Follow-up "apa yang harus dilakukan?"',
+     'Pakai konteks tersimpan (outlet/channel/periode sama), cek izin ulang, hitung ulang bila data berubah.', 2, True),
+    ('other', '01b · Perintah lain (stok, target, peringkat, opt-in)',
+     'Stok yang dipegang, target harian, peringkat kecamatan/kab-kota, STOP/MULAI TARGET.', 7, True),
+    ('target', '05 · Pengingat target harian (NONAKTIF)',
+     'Jam kerja WIB, hanya yang opt-in, sekali per hari. Aktifkan setelah template WhatsApp Utility disetujui Meta.', 1, False),
+    ('outbox', '06 · Pengirim pesan keluar (outbox)',
+     'Tiap 20 detik: ambil antrean (SKIP LOCKED + lease), kirim, retry bertahap, dead-letter bila gagal permanen.', 3, True),
+    ('recap', '07 · Rekap Google Sheet (NONAKTIF)',
+     'Export snapshot ter-scope (watermark, channel, satuan, total) → tab Rekap. Aktifkan setelah credential Google di-bind.', 4, False),
+    ('import', '08 · Import CSV → staging (NONAKTIF)',
+     'Upload CSV admin → validasi & preview di API; posting hanya setelah konfirmasi admin di dashboard.', 2, False),
+]
+LANE_H, NODE_W = 260, 220
+
+
+def build_combined(parts: dict, enable: frozenset = frozenset()) -> dict:
+    """One canvas: every flow in its own horizontal lane with a coloured sticky note (title + function).
+    Router outputs connect straight to the lanes (no sub-workflows). Do NOT activate together with 01-08 (same webhook)."""
+    src = {
+        'router': parts['01_inbound_router'], 'sales': parts['02_sales_input'], 'insight': parts['03_insight'],
+        'follow': parts['04_follow_up'], 'target': parts['05_daily_target'], 'outbox': parts['06_outbox_dispatcher'],
+        'recap': parts['07_spreadsheet_recap'], 'import': parts['08_import_staging'],
+    }
+    prefix = {'sales': 'Sales · ', 'insight': 'Insight · ', 'follow': 'Follow-up · ', 'other': 'Lainnya · ', 'target': 'Target · ',
+              'outbox': 'Outbox · ', 'recap': 'Rekap · ', 'import': 'Import · '}
+    nodes, conns, first = [], {}, {}
+    for lane_i, (key, title, desc, color, active) in enumerate(LANES):
+        y = lane_i * LANE_H
+        if key in enable and not active:
+            active, title = True, title.replace(' (NONAKTIF)', ' (AKTIF)')
+        if key == 'router':
+            lane_nodes = [dict(n) for n in src['router']['nodes'] if n['type'] != 'n8n-nodes-base.executeWorkflow'
+                          and not n['name'].endswith('(other)')]
+            lane_conns = {k: v for k, v in src['router']['connections'].items() if not k.endswith('(other)')}
+            rename = {}
+        elif key == 'other':
+            lane_nodes = [dict(n) for n in src['router']['nodes'] if n['name'].endswith('(other)')]
+            rename = {n['name']: prefix['other'] + n['name'].replace(' (other)', '') for n in lane_nodes}
+            lane_conns = {k: v for k, v in src['router']['connections'].items() if k.endswith('(other)')}
+        else:
+            lane_nodes = [dict(n) for n in src[key]['nodes'] if n['type'] != 'n8n-nodes-base.executeWorkflowTrigger']
+            rename = {n['name']: prefix[key] + n['name'] for n in lane_nodes}
+            lane_conns = {k: v for k, v in src[key]['connections'].items() if k != 'Event'}
+        ordered = lane_nodes  # generator already lists nodes in flow order
+        for x_i, n in enumerate(ordered):
+            n['name'] = rename.get(n['name'], n['name'])
+            # Keep expression references ($('Node')) valid after lane prefixes are added.
+            params = json.dumps(n.get('parameters', {}), ensure_ascii=False)
+            for old, new in rename.items():
+                params = params.replace(f"$('{old}')", f"$('{new}')")
+            n['parameters'] = json.loads(params)
+            n['id'] = f'{key}-{x_i}'
+            n['position'] = [80 + x_i * NODE_W, y + 110]
+            if not active and n['type'] in ('n8n-nodes-base.scheduleTrigger', 'n8n-nodes-base.webhook'):
+                n['disabled'] = True
+            nodes.append(n)
+        if ordered:
+            first[key] = ordered[0]['name']
+        for a, spec in lane_conns.items():
+            conns[rename.get(a, a)] = {'main': [[{**c, 'node': rename.get(c['node'], c['node'])} for c in branch]
+                                                for branch in spec['main']]}
+        nodes.append({'id': f'note-{key}', 'name': f'Catatan {title}', 'type': 'n8n-nodes-base.stickyNote', 'typeVersion': 1,
+                      'position': [40, y], 'parameters': {'content': f'## {title}\n{desc}', 'color': color,
+                                                          'width': 80 + max(1, len(ordered)) * NODE_W + 40, 'height': LANE_H - 20}})
+    # Router branches -> lane entry nodes.
+    conns['Route'] = {'main': [[{'node': first[k], 'type': 'main', 'index': 0}] for k in ('sales', 'insight', 'follow', 'other')]}
+    return wf('telco00allinone01', 'TELCO 00 — Semua alur (satu tampilan)', nodes, conns)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--api-base', default='http://api:8000')
     ap.add_argument('--out', default='n8n/workflows')
+    ap.add_argument('--enable', default='', help='comma list of normally-off lanes to enable in 00: target,recap,import')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    for name, w in build(a.api_base.rstrip('/')).items():
+    parts = build(a.api_base.rstrip('/'))
+    parts['00_telco_all_in_one'] = build_combined(parts, frozenset(x for x in a.enable.split(',') if x))
+    for name, w in parts.items():
         (out / f'{name}.json').write_text(json.dumps(w, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print('wrote', len(list(out.glob('*.json'))), 'workflows to', out)
 

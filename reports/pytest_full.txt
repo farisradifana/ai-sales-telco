@@ -106,4 +106,4 @@ tests/test_unit_api.py::test_scrub_ids_removes_technical_ids PASSED      [100%]
 =========================== short test summary info ===========================
 SKIPPED [1] tests\test_postgres.py:40: DATABASE_URL absent; real PostgreSQL server tests skipped
 SKIPPED [1] tests\test_postgres.py:62: DATABASE_URL absent; real PostgreSQL server tests skipped
-================== 95 passed, 2 skipped in 83.51s (0:01:23) ===================
+================== 95 passed, 2 skipped in 110.11s (0:01:50) ==================

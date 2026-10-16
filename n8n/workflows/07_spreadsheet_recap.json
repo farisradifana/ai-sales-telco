@@ -41,7 +41,7 @@
               "id": "s",
               "name": "scope",
               "type": "string",
-              "value": "district"
+              "value": "province"
             },
             {
               "id": "e",
@@ -133,6 +133,40 @@
       "waitBetweenTries": 3000
     },
     {
+      "id": "clear",
+      "name": "Clear Rekap tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        -160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Rekap"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": false
+      }
+    },
+    {
       "id": "rows",
       "name": "CSV to rows",
       "type": "n8n-nodes-base.code",
@@ -144,7 +178,7 @@
       "parameters": {
         "language": "javaScript",
         "mode": "runOnceForAllItems",
-        "jsCode": "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\nconst text = $input.first().json.csv || '';\nconst lines = text.split('\\n').filter(l => l.length);\nconst meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\nconst data = lines.filter(l => !l.startsWith('# '));\nconst header = data.shift().split(',');\nconst rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\nreturn [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];"
+        "jsCode": "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\nconst text = $('Export CSV').first().json.csv || '';\nconst lines = text.split('\\n').filter(l => l.length);\nconst meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\nconst data = lines.filter(l => !l.startsWith('# '));\nconst header = data.shift().split(',');\nconst rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\nreturn [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];"
       }
     },
     {
@@ -210,6 +244,17 @@
       ]
     },
     "Export CSV": {
+      "main": [
+        [
+          {
+            "node": "Clear Rekap tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Rekap tab": {
       "main": [
         [
           {

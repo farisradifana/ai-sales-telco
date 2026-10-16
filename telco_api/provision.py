@@ -122,6 +122,35 @@ def _grant(c, principal: str, scope: str, entity: int) -> None:
                   (principal, scope, entity))
 
 
+def recap_bot(url: str) -> None:
+    """Read-only reporting principal for the n8n recap workflow: district grants for the whole province, no sales role."""
+    with psycopg.connect(url) as c:
+        c.execute('''INSERT INTO telco.app_principal(principal_id,role,display_name) VALUES('svc-recap','supervisor','Bot Rekap Spreadsheet')
+            ON CONFLICT DO NOTHING''')
+        for (did,) in c.execute('SELECT id FROM telco.district').fetchall():
+            _grant(c, 'svc-recap', 'district', did)
+        c.commit()
+    print('recap-bot: OK')
+
+
+def mint_jwt(principal: str, days: int, out: str | None) -> None:
+    """Long-lived service JWT for an n8n credential (max 30 days; rotate before expiry). Written to a file, never printed."""
+    import jwt
+    import secrets
+    from pathlib import Path
+    s = get_settings()
+    if not 1 <= days <= 30:
+        raise SystemExit('days must be 1..30')
+    now = datetime.now(timezone.utc)
+    tok = jwt.encode({'sub': principal, 'iss': s.jwt_issuer, 'aud': s.jwt_audience, 'iat': now, 'nbf': now,
+                      'exp': now + timedelta(days=days), 'jti': secrets.token_hex(8)}, s.jwt_secret.get_secret_value(), algorithm='HS256')
+    if out:
+        Path(out).write_text(tok, encoding='utf-8')
+        print(f'jwt for {principal} written to {out} (expires in {days} days)')
+    else:
+        raise SystemExit('use --out <file>; tokens are not printed')
+
+
 def revoke(url: str, principal: str, scope: str, entity: int, actor: str, reason: str) -> None:
     with psycopg.connect(url) as c:
         c.execute('DELETE FROM telco.principal_grant WHERE principal_id=%s AND scope_type=%s AND entity_id=%s', (principal, scope, entity))
@@ -131,14 +160,20 @@ def revoke(url: str, principal: str, scope: str, entity: int, actor: str, reason
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('action', choices=['roles', 'demo', 'revoke'])
+    ap.add_argument('action', choices=['roles', 'demo', 'revoke', 'recap-bot', 'mint-jwt'])
     ap.add_argument('--principal'), ap.add_argument('--scope'), ap.add_argument('--entity', type=int)
     ap.add_argument('--reason', default='admin revoke')
+    ap.add_argument('--days', type=int, default=30)
+    ap.add_argument('--out')
     a = ap.parse_args()
     if a.action == 'roles':
         roles(os.environ['ADMIN_DATABASE_URL'])
     elif a.action == 'demo':
         demo(os.environ['OPS_DATABASE_URL'])
+    elif a.action == 'recap-bot':
+        recap_bot(os.environ['OPS_DATABASE_URL'])
+    elif a.action == 'mint-jwt':
+        mint_jwt(a.principal, a.days, a.out)
     else:
         revoke(os.environ['OPS_DATABASE_URL'], a.principal, a.scope, a.entity, 'cli', a.reason)
 

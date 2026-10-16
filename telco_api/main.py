@@ -271,7 +271,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
 
     # ------------------------------------------------------------------ exports / imports
     @app.get('/v1/exports/sales.csv')
-    def export_csv(scope: str = Query(pattern='^(outlet|district)$'), entity_id: int = Query(ge=1),
+    def export_csv(scope: str = Query(pattern='^(outlet|district|regency|province)$'), entity_id: int = Query(ge=1),
                    channel: str = Query(pattern='^(sell_in|sell_out)$'), start: date = Query(...), end: date = Query(...),
                    p: Principal = Depends(principal)):
         body, meta = spreadsheet.export_sales_csv(database, p, scope, entity_id, channel, start, end)

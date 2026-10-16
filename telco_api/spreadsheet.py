@@ -26,8 +26,11 @@ def export_sales_csv(db, p: Principal, scope: str, entity_id: int, channel: str,
         wm = conn.execute('SELECT complete_through,batch_key FROM telco.ingestion_watermark WHERE source=%s', (channel,)).fetchone()
         rows = conn.execute('''SELECT s.day,o.code,o.name,p.sku,p.stock_unit,sum(s.quantity),sum(s.revenue_idr),sum(s.net_lines)
             FROM telco.v_daily_sales s JOIN telco.outlet o ON o.id=s.outlet_id JOIN telco.product p ON p.id=s.product_id
-            WHERE s.channel=%s AND s.day>=%s AND s.day<%s AND ((%s='outlet' AND o.id=%s) OR (%s='district' AND o.district_id=%s))
-            GROUP BY 1,2,3,4,5 ORDER BY 1,2,4''', (channel, start, end, scope, entity_id, scope, entity_id)).fetchall()
+            JOIN telco.district dd ON dd.id=o.district_id JOIN telco.regency rr ON rr.id=dd.regency_id
+            WHERE s.channel=%s AND s.day>=%s AND s.day<%s AND ((%s='outlet' AND o.id=%s) OR (%s='district' AND o.district_id=%s)
+              OR (%s='regency' AND dd.regency_id=%s) OR (%s='province' AND rr.province_id=%s))
+            GROUP BY 1,2,3,4,5 ORDER BY 1,2,4''', (channel, start, end, scope, entity_id, scope, entity_id, scope, entity_id,
+                                                  scope, entity_id)).fetchall()
         return wm, rows
 
     wm, rows = db.read(q)
