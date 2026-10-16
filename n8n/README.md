@@ -53,5 +53,5 @@ Smoke test import yang dijalankan (n8n 2.35.7, SQLite terisolasi): `Successfully
 ## Queue mode
 
 `deploy/compose.staging.yaml`: `n8n` (main), `n8n-webhook`, `n8n-worker`, PostgreSQL terpisah `n8n-db`, Redis privat ber-password,
-`N8N_ENCRYPTION_KEY` identik di ketiganya, `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none` (minimasi PII). Uji E2E lokal di host
+`N8N_ENCRYPTION_KEY` identik di ketiganya, eksekusi sukses disimpan lalu dipangkas setelah 24 jam (`EXECUTIONS_DATA_MAX_AGE=24`). Setelan `none` tidak dipakai: di 2.35.7 eksekusi workflow multi-trigger tertahan berstatus *running*. Data eksekusi hanya berisi ID pesan, narasi, dan tautan bertanda tangan; tanpa nomor telepon atau token. Uji E2E lokal di host
 pengembang berjalan dalam mode reguler karena Redis/Docker tidak tersedia; queue mode belum diuji di sesi ini.

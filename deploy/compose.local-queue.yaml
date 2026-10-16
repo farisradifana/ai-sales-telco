@@ -19,7 +19,9 @@ x-n8n: &n8n
     N8N_DIAGNOSTICS_ENABLED: "false"
     GENERIC_TIMEZONE: Asia/Jakarta
     TZ: Asia/Jakarta
-    EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+    EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+    EXECUTIONS_DATA_PRUNE: "true"
+    EXECUTIONS_DATA_MAX_AGE: "24"
     N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
     WEBHOOK_URL: http://127.0.0.1:5688/
   extra_hosts: ["host.docker.internal:host-gateway"]

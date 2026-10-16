@@ -28,7 +28,8 @@ CRED = {'svc': {'httpHeaderAuth': {'id': 'telcoApiService', 'name': 'TELCO API s
         'admin': {'httpHeaderAuth': {'id': 'telcoAdminJwt', 'name': 'TELCO admin principal JWT'}},
         'sheets': {'googleSheetsOAuth2Api': {'id': 'googleSheetsRecap', 'name': 'Google Sheets recap'}}}
 REF = "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
-SETTINGS = {'executionOrder': 'v1', 'timezone': 'Asia/Jakarta', 'saveDataSuccessExecution': 'none',
+# 'none' leaves multi-trigger executions stuck in 'running' on n8n 2.35.7 (verified locally); keep 'all' + 24h pruning.
+SETTINGS = {'executionOrder': 'v1', 'timezone': 'Asia/Jakarta', 'saveDataSuccessExecution': 'all',
             'saveDataErrorExecution': 'all', 'saveManualExecutions': False, 'callerPolicy': 'workflowsFromSameOwner'}
 
 

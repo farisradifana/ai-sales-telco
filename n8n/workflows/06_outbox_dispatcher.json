@@ -68,7 +68,7 @@
   "settings": {
     "executionOrder": "v1",
     "timezone": "Asia/Jakarta",
-    "saveDataSuccessExecution": "none",
+    "saveDataSuccessExecution": "all",
     "saveDataErrorExecution": "all",
     "saveManualExecutions": false,
     "callerPolicy": "workflowsFromSameOwner"
