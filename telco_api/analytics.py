@@ -10,7 +10,17 @@ from .money import dec, rupiah, stringify_money
 from .security import Principal
 
 QUERY_VERSION = 'diagnose-v1'
+AREA_QUERY_VERSION = 'diagnose-area-v1'
 API_VERSION = 'api-diagnose-v1'
+AREA_SCOPES = ('regency', 'province')
+# Same population predicate as telco.diagnose_area (outlet o, district d, regency r).
+SCOPE_FROM = 'telco.outlet o JOIN telco.district d ON d.id=o.district_id JOIN telco.regency r ON r.id=d.regency_id'
+SCOPE_PRED = '''((%(scope)s='outlet' AND o.id=%(id)s) OR (%(scope)s='district' AND o.district_id=%(id)s)
+    OR (%(scope)s='regency' AND d.regency_id=%(id)s) OR (%(scope)s='province' AND r.province_id=%(id)s))'''
+
+
+def query_version_for(scope: str) -> str:
+    return AREA_QUERY_VERSION if scope in AREA_SCOPES else QUERY_VERSION
 
 
 def _watermark(conn, channel: str) -> tuple[date | None, str | None]:
@@ -29,16 +39,47 @@ def _entity(conn, scope: str, entity_id: int) -> dict:
             JOIN telco.district d ON d.id=o.district_id WHERE o.id=%s''', (entity_id,)).fetchone()
         return {'type': 'outlet', 'id': r[0], 'code': r[1], 'name': r[2], 'district_id': r[3], 'district_name': r[4],
                 'opened_on': str(r[5]), 'closed_on': str(r[6]) if r[6] else None}
-    r = conn.execute('SELECT id,code,name FROM telco.district WHERE id=%s', (entity_id,)).fetchone()
-    return {'type': 'district', 'id': r[0], 'code': r[1], 'name': r[2]}
+    if scope == 'district':
+        r = conn.execute('''SELECT d.id,d.code,d.name,r.id,r.name FROM telco.district d JOIN telco.regency r ON r.id=d.regency_id
+            WHERE d.id=%s''', (entity_id,)).fetchone()
+        return {'type': 'district', 'id': r[0], 'code': r[1], 'name': r[2], 'regency_id': r[3], 'regency_name': r[4]}
+    if scope == 'regency':
+        r = conn.execute('''SELECT r.id,r.code,r.name,v.id,v.name,(SELECT count(*) FROM telco.district d WHERE d.regency_id=r.id)
+            FROM telco.regency r JOIN telco.province v ON v.id=r.province_id WHERE r.id=%s''', (entity_id,)).fetchone()
+        return {'type': 'regency', 'id': r[0], 'code': r[1], 'name': r[2], 'province_id': r[3], 'province_name': r[4],
+                'district_count': r[5]}
+    r = conn.execute('''SELECT v.id,v.code,v.name,(SELECT count(*) FROM telco.regency r WHERE r.province_id=v.id)
+        FROM telco.province v WHERE v.id=%s''', (entity_id,)).fetchone()
+    return {'type': 'province', 'id': r[0], 'code': r[1], 'name': r[2], 'regency_count': r[3]}
 
 
 def _population(conn, scope: str, entity_id: int, b0: date, c1: date) -> dict:
-    r = conn.execute('''SELECT count(*),count(*) FILTER(WHERE opened_on>%s),count(*) FILTER(WHERE closed_on IS NOT NULL AND closed_on<%s)
-        FROM telco.outlet WHERE (%s='outlet' AND id=%s) OR (%s='district' AND district_id=%s)''',
-                     (b0, c1, scope, entity_id, scope, entity_id)).fetchone()
-    return {'outlets_in_scope': r[0], 'opened_during_comparison': r[1], 'closed_during_comparison': r[2],
-            'note': 'Populasi tetap: seluruh outlet di cakupan, termasuk yang tidak bertransaksi.'}
+    r = conn.execute(f'''SELECT count(*),count(*) FILTER(WHERE o.opened_on>%(b0)s),
+        count(*) FILTER(WHERE o.closed_on IS NOT NULL AND o.closed_on<%(c1)s),count(DISTINCT o.district_id)
+        FROM {SCOPE_FROM} WHERE {SCOPE_PRED}''', {'b0': b0, 'c1': c1, 'scope': scope, 'id': entity_id}).fetchone()
+    out = {'outlets_in_scope': r[0], 'opened_during_comparison': r[1], 'closed_during_comparison': r[2],
+           'note': 'Populasi tetap: seluruh outlet di cakupan, termasuk yang tidak bertransaksi.'}
+    if scope in AREA_SCOPES:
+        out['districts_with_outlets'] = r[3]
+    return out
+
+
+def _diagnose_sql(conn, scope: str, entity_id: int, channel: str, b0: date, b1: date, c0: date, c1: date) -> dict:
+    if scope not in AREA_SCOPES:
+        return ref_tools.diagnose(conn, scope, entity_id, channel, *(x.isoformat() for x in (b0, b1, c0, c1)))
+    e = conn.execute('SELECT telco.diagnose_area(%s,%s,%s,%s,%s,%s,%s)', (scope, int(entity_id), channel, b0, b1, c0, c1)).fetchone()[0]
+    tol = Decimal('0.01')
+    delta = dec(e['delta_idr'])
+    total = sum((dec(d['delta_idr']) for d in e['drivers']), Decimal(0))
+    residual = sum((dec(d['delta_idr']) - dec(d['volume_effect_idr']) - dec(d['price_mix_effect_idr']) - dec(d['entry_exit_effect_idr'])
+                    for d in e['drivers']), Decimal(0))
+    # Area total must equal the sum of its SKUs, of its outlets, kecamatan and kab/kota (one channel; never sell-in+sell-out).
+    parts = [sum((dec(c['delta_idr']) for c in e[k]), Decimal(0))
+             for k in ('outlet_contributions', 'district_contributions', 'regency_contributions')]
+    if abs(total - delta) > tol or abs(residual) > tol or any(abs(x - delta) > tol for x in parts):
+        raise ValueError('Decomposition does not reconcile')
+    e['reconciliation_residual_idr'] = str(residual)
+    return e
 
 
 def _quality(e: dict, c1: date) -> dict:
@@ -98,6 +139,17 @@ def recommend(e: dict, entity: dict) -> dict:
             item['guardrail'] = 'Pantau periode sebanding berikutnya.'
         item['scope'] = {'type': entity['type'], 'id': entity['id']}
         out.append(item)
+    worst = sorted((c for c in e.get('district_contributions') or [] if dec(c['delta_idr']) < 0), key=lambda c: dec(c['delta_idr']))
+    if entity['type'] in AREA_SCOPES and ref['data_ready'] and dec(e['delta_idr']) < 0 and worst:
+        w = worst[0]
+        out.append({'priority': 2, 'action': f"Drill-down ke Kecamatan {w['name']} dan outletnya sebelum menyimpulkan penyebab di tingkat area.",
+                    'evidence': ['district_contributions[0]'], 'owner': 'Head of Branch' if entity['type'] == 'regency' else 'Head of Sales',
+                    'review_in_days': 7, 'success_metric': 'Net revenue/day kecamatan terpilih vs kecamatan lain di area yang sama',
+                    'confidence': 'accounting contribution verified; causality unproven', 'requires_human_confirmation': True,
+                    'fact': f"Kecamatan {w['name']} berubah {rupiah(w['delta_idr'])} dari total area {rupiah(e['delta_idr'])}.",
+                    'hypothesis': None,
+                    'guardrail': 'Bandingkan dengan kecamatan sepadan; jangan realokasi target/stok berdasarkan satu periode.',
+                    'scope': {'type': 'district', 'id': w['district_id']}})
     return {'data_ready': ref['data_ready'], 'actions': out, 'limitations': ref['limitations'],
             'execution_policy': 'Rencana tindakan bukan eksekusi; perubahan stok/harga/kampanye butuh konfirmasi manusia.'}
 
@@ -108,7 +160,7 @@ def diagnose(db, p: Principal, req, correlation_id: str, tool: str = 'diagnose')
         authz.require(conn, p, req.scope, req.entity_id)
         wm, batch = _watermark(conn, req.channel)
         b0, b1, c0, c1, policy = periods.resolve(req, wm)
-        e = ref_tools.diagnose(conn, req.scope, req.entity_id, req.channel, *(x.isoformat() for x in (b0, b1, c0, c1)))
+        e = _diagnose_sql(conn, req.scope, req.entity_id, req.channel, b0, b1, c0, c1)
         ent = _entity(conn, req.scope, req.entity_id)
         pop = _population(conn, req.scope, req.entity_id, b0, c1)
         return e, ent, pop, (b0, b1, c0, c1, policy), batch
@@ -119,7 +171,7 @@ def diagnose(db, p: Principal, req, correlation_id: str, tool: str = 'diagnose')
     for d in e['drivers']:
         d['growth'] = _growth(dec(d['r0']), dec(d['delta_idr']))
     payload = {
-        'tool': tool, 'query_version': QUERY_VERSION, 'api_version': API_VERSION, 'scope': req.scope,
+        'tool': tool, 'query_version': query_version_for(req.scope), 'api_version': API_VERSION, 'scope': req.scope,
         'entity_id': req.entity_id, 'entity': ent, 'channel': req.channel, 'metric': 'net_revenue_idr',
         'baseline': periods.period_obj(b0, b1), 'current': periods.period_obj(c0, c1), 'period_policy': policy,
         'baseline_label': periods.label(b0, b1), 'current_label': periods.label(c0, c1),
@@ -132,6 +184,12 @@ def diagnose(db, p: Principal, req, correlation_id: str, tool: str = 'diagnose')
         'decomposition': 'Volume/harga-mix per SKU adalah dekomposisi akuntansi (Shapley 2 faktor), bukan sebab kausal.',
         'stockout': 'Tidak diukur (observed_stockout_minutes NULL = unknown); saldo nol tidak membuktikan lost sales.',
     }
+    if req.scope in AREA_SCOPES:
+        payload['district_contributions'] = e['district_contributions']
+        if req.scope == 'province':
+            payload['regency_contributions'] = e['regency_contributions']
+        payload['drill_down'] = {'next_scope': 'regency' if req.scope == 'province' else 'district',
+                                 'note': 'Drill-down ke kab/kota/kecamatan/outlet diotorisasi ulang per entitas.'}
     payload = _rehydrate(payload)
     payload['recommendation'] = recommend(payload, ent)
     params = {'scope': req.scope, 'entity_id': req.entity_id, 'channel': req.channel,
@@ -173,6 +231,55 @@ def rank_districts(db, p: Principal, req, correlation_id: str) -> dict:
     params = {'channel': req.channel, 'baseline': [str(b0), str(b1)], 'current': [str(c0), str(c1)]}
     payload = _rehydrate(payload)
     return stringify_money(db.write(lambda conn: evidence.store(conn, p, 'rank_districts', params, payload, correlation_id)))
+
+
+REGENCY_COLS = ['regency_id', 'regency_code', 'regency_name', 'district_count', 'outlet_count', 'baseline_idr', 'current_idr',
+                'delta_idr', 'growth']
+
+
+def authorized_regencies(conn, p: Principal, channel: str, b0: date, b1: date, c0: date, c1: date) -> list[dict]:
+    # Grant filter inside SQL: a kab/kota without a district grant on EVERY kecamatan never leaves the database.
+    rows = conn.execute('''SELECT r.* FROM telco.rank_regencies(%s,%s,%s,%s,%s) r
+        WHERE telco.can_access_area(%s,'regency',r.regency_id) ORDER BY r.delta_idr,r.regency_id''',
+                        (channel, b0, b1, c0, c1, p.principal_id)).fetchall()
+    out = [dict(zip(REGENCY_COLS, r)) for r in rows]
+    for r in out:
+        r['growth'] = _growth(dec(r['baseline_idr']), dec(r['delta_idr']))
+    return out
+
+
+def rank_regencies(db, p: Principal, req, correlation_id: str) -> dict:
+    def q(conn):
+        wm, batch = _watermark(conn, req.channel)
+        b0, b1, c0, c1, policy = periods.resolve(req, wm)
+        rows = authorized_regencies(conn, p, req.channel, b0, b1, c0, c1)
+        cov = {}
+        if rows:
+            ids = [r['regency_id'] for r in rows]
+            col = 'sell_out_complete' if req.channel == 'sell_out' else 'sell_in_complete'
+            for rid, exp, comp in conn.execute(f'''SELECT x.regency_id,count(*),count(*) FILTER(WHERE d.{col})
+                FROM telco.outlet o JOIN telco.district x ON x.id=o.district_id
+                CROSS JOIN generate_series(%s::date,%s::date-1,interval '1 day') g
+                LEFT JOIN telco.outlet_day d ON d.outlet_id=o.id AND d.day=g::date
+                WHERE x.regency_id=ANY(%s) AND g::date>=o.opened_on AND (o.closed_on IS NULL OR g::date<o.closed_on)
+                AND d.expected_open IS DISTINCT FROM false GROUP BY 1''', (c0, c1, ids)).fetchall():
+                cov[rid] = {'expected_outlet_days': exp, 'complete_outlet_days': comp, 'complete_ratio': _ratio(comp, exp)}
+        return rows, cov, wm, batch, (b0, b1, c0, c1, policy)
+
+    rows, cov, wm, batch, (b0, b1, c0, c1, policy) = db.read(q)
+    if not rows:
+        raise errors.denied('Tidak ada kabupaten/kota yang diizinkan untuk peringkat ini.')
+    for r in rows:
+        r['coverage'] = cov.get(r['regency_id'])
+    payload = {'tool': 'rank_regencies', 'query_version': 'rank-regencies-v1', 'channel': req.channel,
+               'baseline': periods.period_obj(b0, b1), 'current': periods.period_obj(c0, c1), 'period_policy': policy,
+               'baseline_label': periods.label(b0, b1), 'current_label': periods.label(c0, c1),
+               'regencies': rows, 'watermark': str(wm) if wm else None, 'source_batch_key': batch,
+               'authorized_only': True,
+               'next_step': 'Peringkat bukan dasar tindakan: diagnosis kab/kota terpilih lalu drill-down ke kecamatan dan outlet.'}
+    params = {'channel': req.channel, 'baseline': [str(b0), str(b1)], 'current': [str(c0), str(c1)]}
+    payload = _rehydrate(payload)
+    return stringify_money(db.write(lambda conn: evidence.store(conn, p, 'rank_regencies', params, payload, correlation_id)))
 
 
 def stock(db, p: Principal, req, correlation_id: str) -> dict:
@@ -269,6 +376,14 @@ def resolve_entity(db, p: Principal, req) -> dict:
             for d in authz.districts(conn, p):
                 if _match(text, d['code'], d['name'], d['id'], 'district'):
                     out.append({'scope': 'district', 'entity_id': d['id'], 'code': d['code'], 'name': d['name']})
+        if req.scope in (None, 'regency'):
+            for r in authz.regencies(conn, p):
+                if _match(text, r['code'], r['name'], r['id'], 'regency'):
+                    out.append({'scope': 'regency', 'entity_id': r['id'], 'code': r['code'], 'name': r['name']})
+        if req.scope in (None, 'province'):
+            for v in authz.provinces(conn, p):
+                if _match(text, v['code'], v['name'], v['id'], 'province'):
+                    out.append({'scope': 'province', 'entity_id': v['id'], 'code': v['code'], 'name': v['name']})
         return out
 
     cands = db.read(q)
@@ -298,7 +413,9 @@ def _match(text: str, code: str, name: str, ident: int, kind: str) -> bool:
 def trend(conn, scope: str, entity_id: int, channel: str, b0: date, b1: date, c0: date, c1: date) -> list[dict]:
     col = 'sell_out_complete' if channel == 'sell_out' else 'sell_in_complete'
     rows = conn.execute(f'''
-      WITH pop AS (SELECT id,opened_on,closed_on FROM telco.outlet WHERE (%s='outlet' AND id=%s) OR (%s='district' AND district_id=%s)),
+      WITH pop AS (SELECT o.id,o.opened_on,o.closed_on FROM telco.outlet o JOIN telco.district d ON d.id=o.district_id
+               JOIN telco.regency r ON r.id=d.regency_id WHERE (%s='outlet' AND o.id=%s) OR (%s='district' AND o.district_id=%s)
+               OR (%s='regency' AND d.regency_id=%s) OR (%s='province' AND r.province_id=%s)),
       days AS (SELECT g::date AS day, CASE WHEN g::date<%s THEN 'baseline' ELSE 'current' END AS period
                FROM generate_series(%s::date,%s::date-1,interval '1 day') g WHERE g::date<%s OR g::date>=%s),
       cov AS (SELECT days.day,count(*) expected,count(*) FILTER(WHERE od.{col}) complete
@@ -309,7 +426,8 @@ def trend(conn, scope: str, entity_id: int, channel: str, b0: date, b1: date, c0
               WHERE s.channel=%s AND ((s.day>=%s AND s.day<%s) OR (s.day>=%s AND s.day<%s)) GROUP BY s.day)
       SELECT days.day,days.period,coalesce(cov.expected,0),coalesce(cov.complete,0),rev.r FROM days
       LEFT JOIN cov ON cov.day=days.day LEFT JOIN rev ON rev.day=days.day ORDER BY days.day''',
-                        (scope, entity_id, scope, entity_id, c0, b0, c1, b1, c0, channel, b0, b1, c0, c1)).fetchall()
+                        (scope, entity_id, scope, entity_id, scope, entity_id, scope, entity_id,
+                         c0, b0, c1, b1, c0, channel, b0, b1, c0, c1)).fetchall()
     out = []
     for day, period, exp, comp, r in rows:
         complete = exp > 0 and comp == exp
@@ -330,14 +448,15 @@ def dashboard_snapshot(db, p: Principal, req, correlation_id: str) -> dict:
         authz.require(conn, p, req.scope, req.entity_id)
         series = trend(conn, req.scope, req.entity_id, req.channel, b0, b1, c0, c1)
         ranking = ref_tools.rank_authorized_districts(conn, p.principal_id, req.channel, *(x.isoformat() for x in (b0, b1, c0, c1)))
-        return series, ranking
+        regencies = authorized_regencies(conn, p, req.channel, b0, b1, c0, c1)
+        return series, ranking, regencies
 
-    series, ranking = db.read(q)
+    series, ranking, regencies = db.read(q)
     for r in ranking:
         r['growth'] = _growth(dec(r['baseline_idr']), dec(r['delta_idr']))
     payload = {k: v for k, v in base.items() if k not in evidence.ID_FIELDS}
     payload.update({'tool': 'dashboard', 'query_version': 'dashboard-v1', 'diagnose_evidence_id': base['evidence_id'],
-                    'trend': series, 'district_ranking': ranking,
+                    'trend': series, 'district_ranking': ranking, 'regency_ranking': regencies,
                     'generated_at': datetime.now(timezone.utc).isoformat()})
     # Re-hydrate money strings into Decimal before storing to keep exact JSON numbers.
     params = {'scope': req.scope, 'entity_id': req.entity_id, 'channel': req.channel,

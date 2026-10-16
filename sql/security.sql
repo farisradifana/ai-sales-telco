@@ -15,6 +15,9 @@ REVOKE SELECT ON telco.conversation_context,telco.analysis_audit,telco.inbound_e
 GRANT EXECUTE ON FUNCTION telco.diagnose(text,integer,text,date,date,date,date),
  telco.rank_districts(text,date,date,date,date) TO telco_reader;
 GRANT EXECUTE ON FUNCTION telco.can_access(text,text,integer),telco.stock_as_of(integer,integer,timestamptz) TO telco_reader;
+-- Area scope (migration 009): regency/province aggregates, default-deny area check.
+GRANT EXECUTE ON FUNCTION telco.can_access_area(text,text,integer),telco.diagnose_area(text,integer,text,date,date,date,date),
+ telco.rank_regencies(text,date,date,date,date) TO telco_reader;
 -- Posting is the only route to mutate ledger/balance. Functions must remain owned by trusted migration owner.
 ALTER FUNCTION telco.post_supply() SECURITY DEFINER;
 ALTER FUNCTION telco.post_sale() SECURITY DEFINER;

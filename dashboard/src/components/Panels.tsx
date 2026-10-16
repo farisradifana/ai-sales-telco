@@ -46,10 +46,38 @@ export function Contributors({ d, onPick }: { d: Dashboard; onPick: (outletId: n
           <thead><tr><th scope="col">Outlet</th><th scope="col">Baseline</th><th scope="col">Current</th><th scope="col">Δ</th></tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.outlet_id}>
-              <td>{d.scope === 'district'
+              <td>{d.scope !== 'outlet'
                 ? <button type="button" className="link" onClick={() => onPick(r.outlet_id)}>{r.name}</button> : r.name}</td>
               <td>{rupiah(r.baseline_idr)}</td><td>{rupiah(r.current_idr)}</td><td className={Number(r.delta_idr) < 0 ? 'neg' : 'pos'}>{rupiah(r.delta_idr)}</td>
             </tr>))}</tbody>
+        </table></div>)}
+    </section>
+  );
+}
+
+// Kab/kota -> kecamatan, provinsi -> kab/kota. Sums equal the area total (reconciled server-side, one channel only).
+export function AreaContributors({ d, canPick, onPick }:
+  { d: Dashboard; canPick: (id: number) => boolean; onPick: (id: number) => void }) {
+  const byRegency = d.scope === 'province';
+  const src = (byRegency ? d.regency_contributions : d.district_contributions) ?? [];
+  const rows = [...src].sort((a, b) => Number(a.delta_idr) - Number(b.delta_idr));
+  const unit = byRegency ? 'Kab/Kota' : 'Kecamatan';
+  return (
+    <section className="card" aria-labelledby="ac2-h">
+      <h2 id="ac2-h">Kontributor {unit.toLowerCase()}</h2>
+      <p className="muted">Jumlah Δ seluruh baris = Δ {d.scope === 'province' ? 'provinsi' : 'kab/kota'} ({rupiah(d.delta_idr)}). Drill-down membuka {unit.toLowerCase()} yang Anda akses.</p>
+      {rows.length === 0 ? <p className="empty">Tidak ada outlet pada cakupan ini.</p> : (
+        <div className="tablewrap"><table>
+          <thead><tr><th scope="col">{unit}</th><th scope="col">Outlet</th><th scope="col">Baseline</th><th scope="col">Current</th><th scope="col">Δ</th></tr></thead>
+          <tbody>{rows.map((r) => {
+            const id = (byRegency ? r.regency_id : r.district_id)!;
+            return (
+              <tr key={id}>
+                <td>{canPick(id) ? <button type="button" className="link" onClick={() => onPick(id)}>{r.name}</button> : r.name}</td>
+                <td>{r.outlets}</td><td>{rupiah(r.baseline_idr)}</td><td>{rupiah(r.current_idr)}</td>
+                <td className={Number(r.delta_idr) < 0 ? 'neg' : 'pos'}>{rupiah(r.delta_idr)}</td>
+              </tr>);
+          })}</tbody>
         </table></div>)}
     </section>
   );

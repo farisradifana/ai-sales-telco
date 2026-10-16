@@ -1,6 +1,8 @@
 // Thin typed client. Session is an httpOnly cookie set by the API; the browser never holds DB or service credentials.
 export type Channel = 'sell_in' | 'sell_out';
-export type ScopeType = 'outlet' | 'district';
+// regency (kab/kota) and province are listed in /v1/me only when EVERY kecamatan in the area is granted.
+export type ScopeType = 'outlet' | 'district' | 'regency' | 'province';
+export const AREA_SCOPES: ScopeType[] = ['regency', 'province'];
 
 export interface Me {
   principal_id: string;
@@ -10,6 +12,8 @@ export interface Me {
   org: { code: string; level: string; title: string; sales_area: string | null; manager_title: string | null } | null;
   outlets: { id: number; code: string; name: string; district_id: number; district_name: string }[];
   districts: { id: number; code: string; name: string }[];
+  regencies: { id: number; code: string; name: string; province_id: number; districts: number }[];
+  provinces: { id: number; code: string; name: string }[];
   watermarks: Record<string, string>;
 }
 
@@ -32,19 +36,30 @@ export interface TrendPoint {
 }
 
 export interface RankRow { district_id: number; district_name: string; baseline_idr: string; current_idr: string; delta_idr: string; growth: string | null }
+export interface RegencyRankRow {
+  regency_id: number; regency_code: string; regency_name: string; district_count: number; outlet_count: number;
+  baseline_idr: string; current_idr: string; delta_idr: string; growth: string | null;
+}
+export interface AreaContribution {
+  district_id?: number; regency_id?: number; code: string; name: string; outlets: number; districts?: number;
+  baseline_idr: string; current_idr: string; delta_idr: string;
+}
 
 export interface Dashboard {
   evidence_id: string; evidence_digest: string; diagnose_evidence_id: string; correlation_id: string; query_version: string;
-  scope: ScopeType; entity_id: number; entity: { name: string; code: string; district_id?: number; district_name?: string };
+  scope: ScopeType; entity_id: number;
+  entity: { name: string; code: string; district_id?: number; district_name?: string; regency_id?: number; regency_name?: string;
+            province_id?: number; province_name?: string; district_count?: number; regency_count?: number };
   channel: Channel; baseline: Period; current: Period; baseline_label: string; current_label: string; period_policy: string;
   revenue_baseline_idr: string; revenue_current_idr: string; delta_idr: string; growth: string | null;
   drivers: Driver[]; outlet_contributions: { outlet_id: number; name: string; baseline_idr: string; current_idr: string; delta_idr: string }[];
   coverage: Record<string, number | null>; baseline_coverage: Record<string, number | null>;
-  population: { outlets_in_scope: number; opened_during_comparison: number; closed_during_comparison: number; note: string };
+  district_contributions?: AreaContribution[]; regency_contributions?: AreaContribution[];
+  population: { outlets_in_scope: number; opened_during_comparison: number; closed_during_comparison: number; note: string; districts_with_outlets?: number };
   watermark: string | null; source_batch_key: string | null; data_ready: boolean; status: 'final' | 'provisional'; issues: string[];
   current_complete_ratio: string | null; baseline_complete_ratio: string | null; reconciliation_residual_idr: string;
   recommendation: { data_ready: boolean; actions: Action[]; limitations: string[]; execution_policy: string };
-  trend: TrendPoint[]; district_ranking: RankRow[]; generated_at: string; decomposition: string; stockout: string;
+  trend: TrendPoint[]; district_ranking: RankRow[]; regency_ranking: RegencyRankRow[]; generated_at: string; decomposition: string; stockout: string;
 }
 
 export interface StockEvidence {

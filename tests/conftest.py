@@ -34,6 +34,9 @@ def clone_db():
     maint = _with_db(ADMIN, 'postgres')
     with psycopg.connect(maint, autocommit=True) as c:
         c.execute(f'CREATE DATABASE {name} TEMPLATE {template} STRATEGY FILE_COPY')
+    import telco.db as tdb
+    with psycopg.connect(_with_db(ADMIN, name)) as c:
+        tdb.migrate(c)  # migrations newer than the template (e.g. 009_area_scope) go to the clone only, never the template
     env = os.environ
     urls = {
         'name': name,

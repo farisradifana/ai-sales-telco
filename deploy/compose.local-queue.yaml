@@ -1,0 +1,52 @@
+# Local n8n queue mode (Redis + worker) with all data under ../.local/ . Requires Docker Desktop (user-installed).
+#   docker compose -f deploy/compose.local-queue.yaml --env-file .local/dev.env up -d
+# Talks to the API running on the host (host.docker.internal:8000). Ports bound to 127.0.0.1 only.
+name: telco-local-queue
+
+x-n8n: &n8n
+  image: n8nio/n8n:2.35.7
+  environment: &n8n-env
+    DB_TYPE: postgresdb
+    DB_POSTGRESDB_HOST: n8n-db
+    DB_POSTGRESDB_DATABASE: n8n
+    DB_POSTGRESDB_USER: n8n
+    DB_POSTGRESDB_PASSWORD: ${N8N_ENCRYPTION_KEY:?load .local/dev.env}
+    EXECUTIONS_MODE: queue
+    QUEUE_BULL_REDIS_HOST: redis
+    QUEUE_BULL_REDIS_PASSWORD: ${N8N_DISPATCH_SECRET:?load .local/dev.env}
+    QUEUE_HEALTH_CHECK_ACTIVE: "true"
+    N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    GENERIC_TIMEZONE: Asia/Jakarta
+    TZ: Asia/Jakarta
+    EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+    N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+    WEBHOOK_URL: http://127.0.0.1:5688/
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  restart: unless-stopped
+
+services:
+  redis:
+    image: redis:8.2.10-alpine
+    command: ["redis-server", "--requirepass", "${N8N_DISPATCH_SECRET}", "--appendonly", "yes"]
+    volumes: ["../.local/redis:/data"]
+    ports: ["127.0.0.1:6379:6379"]
+  n8n-db:
+    image: postgres:17.11
+    environment: {POSTGRES_DB: n8n, POSTGRES_USER: n8n, POSTGRES_PASSWORD: "${N8N_ENCRYPTION_KEY}"}
+    volumes: ["../.local/n8n-pg:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"], interval: 5s, timeout: 3s, retries: 20}
+  n8n:
+    <<: *n8n
+    ports: ["127.0.0.1:5690:5678"]
+    volumes: ["../.local/n8n-queue:/home/node/.n8n"]
+    depends_on: {n8n-db: {condition: service_healthy}, redis: {condition: service_started}}
+  n8n-webhook:
+    <<: *n8n
+    command: ["webhook"]
+    ports: ["127.0.0.1:5688:5678"]
+    depends_on: [n8n]
+  n8n-worker:
+    <<: *n8n
+    command: ["worker", "--concurrency=5"]
+    depends_on: [n8n]

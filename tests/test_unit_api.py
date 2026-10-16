@@ -102,6 +102,8 @@ def test_waterfall_reconciles_to_delta():
     ('kenapa omzet OUT-0001 turun?', 'insight'), ('apa yang harus dilakukan?', 'follow_up'),
     ('solusinya?', 'follow_up'), ('stok saya', 'stock'), ('target sell-in hari ini', 'target'),
     ('STOP TARGET', 'target_opt_out'), ('kecamatan mana yang turun?', 'rank_districts'),
+    ('kabupaten mana yang turun?', 'rank_regencies'), ('peringkat kab/kota sell-in', 'rank_regencies'),
+    ('kenapa omzet kabupaten madiun turun?', 'insight'),
 ])
 def test_intents(text, name):
     assert intents.parse(text).name == name
@@ -112,6 +114,12 @@ def test_sales_input_needs_outlet_or_channel():
     assert intents.parse('catat SIM-NOVA-8 5 OUT-0001').clarification  # channel missing
 
 
+def test_area_insight_slots():
+    assert intents.parse('kenapa omzet kabupaten madiun turun?').slots == {'query': 'Kabupaten Madiun', 'scope': 'regency', 'channel': 'sell_out'}
+    assert intents.parse('analisa sell-in kota surabaya').slots == {'query': 'Kota Surabaya', 'scope': 'regency', 'channel': 'sell_in'}
+    assert intents.parse('performa provinsi jawa timur').slots['scope'] == 'province'
+
+
 def test_injection_text_is_just_text():
     it = intents.parse("kenapa omzet OUT-0001 turun'; DROP TABLE telco.sell_out; --")
     assert it.name == 'insight' and it.slots['query'] == 'OUT-0001'
@@ -119,7 +127,7 @@ def test_injection_text_is_just_text():
 
 def test_agent_tool_allowlist_has_no_write_or_sql():
     names = set(agent_tools.TOOLS)
-    assert names == {'get_evidence', 'diagnose', 'rank_districts', 'stock', 'target', 'resolve_entity'}
+    assert names == {'get_evidence', 'diagnose', 'rank_districts', 'rank_regencies', 'stock', 'target', 'resolve_entity'}
     for n in names:
         assert agent_tools.input_schema(n)['additionalProperties'] is False
 
@@ -158,7 +166,7 @@ def test_circuit_breaker_opens_and_half_opens():
     cb.failure(); cb.failure()
     assert not cb.allow()
     import time
-    time.sleep(0.06)
+    time.sleep(0.3)  # generous margin: Windows timer granularity / loaded CI must not make this flaky
     assert cb.allow()
 
 

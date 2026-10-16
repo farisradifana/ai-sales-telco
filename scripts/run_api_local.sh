@@ -8,4 +8,13 @@ export WA_SEND_MODE=${LOCAL_WA_SEND_MODE:-mock} WA_GRAPH_BASE_URL=${WA_GRAPH_BAS
 export N8N_DISPATCH_URL=${N8N_DISPATCH_URL:-http://127.0.0.1:${LOCAL_N8N_PORT:-5688}/webhook/telco-inbound}
 export HERMES_BASE_URL=${HERMES_BASE_URL:-http://127.0.0.1:8642} ROUTER_BASE_URL=${ROUTER_BASE_URL:-http://127.0.0.1:8791} FALLBACK_MODEL_ID=${FALLBACK_MODEL_ID:-mock-model}
 export CORS_ORIGINS='' PYTHONPATH=.
+if [ "${LIVE:-0}" = 1 ]; then
+  # Real WhatsApp Cloud API: only allowlisted recipients (scripts/wa_live_setup.py register) can ever receive a message.
+  [ -f .local/live.env ] || { echo "missing .local/live.env (python scripts/wa_live_setup.py init)"; exit 2; }
+  set -a; . .local/live.env; set +a
+  export WA_SEND_MODE=live WA_GRAPH_BASE_URL=https://graph.facebook.com WA_GRAPH_VERSION=${WA_GRAPH_VERSION:-v23.0}
+  for k in WA_PHONE_NUMBER_ID WA_ACCESS_TOKEN WA_APP_SECRET WA_VERIFY_TOKEN WA_LIVE_ALLOWLIST_HMACS; do
+    [ -n "${!k:-}" ] || { echo "LIVE=1 refused: $k is empty in .local/live.env"; exit 2; }
+  done
+fi
 exec .venv/Scripts/python -m uvicorn telco_api.main:app_factory --factory --host 127.0.0.1 --port 8000 --no-access-log

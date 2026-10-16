@@ -1,10 +1,11 @@
-"""Default-deny scope authorization on top of telco.principal_grant / telco.can_access (single tenant, no RLS)."""
+"""Default-deny scope authorization on top of telco.principal_grant / telco.can_access_area (single tenant, no RLS).
+regency/province are allowed only when the principal holds a district grant for EVERY kecamatan in the area."""
 from . import errors
 from .security import Principal
 
 
 def can_access(conn, p: Principal, scope: str, entity_id: int) -> bool:
-    return bool(conn.execute('SELECT telco.can_access(%s,%s,%s)', (p.principal_id, scope, int(entity_id))).fetchone()[0])
+    return bool(conn.execute('SELECT telco.can_access_area(%s,%s,%s)', (p.principal_id, scope, int(entity_id))).fetchone()[0])
 
 
 def require(conn, p: Principal, scope: str, entity_id: int) -> None:
@@ -21,6 +22,18 @@ def outlets(conn, p: Principal) -> list[dict]:
 def districts(conn, p: Principal) -> list[dict]:
     rows = conn.execute('''SELECT d.id,d.code,d.name FROM telco.district d
         WHERE telco.can_access(%s,'district',d.id) ORDER BY d.id''', (p.principal_id,)).fetchall()
+    return [{'id': r[0], 'code': r[1], 'name': r[2]} for r in rows]
+
+
+def regencies(conn, p: Principal) -> list[dict]:
+    rows = conn.execute('''SELECT r.id,r.code,r.name,r.province_id,(SELECT count(*) FROM telco.district d WHERE d.regency_id=r.id)
+        FROM telco.regency r WHERE telco.can_access_area(%s,'regency',r.id) ORDER BY r.code''', (p.principal_id,)).fetchall()
+    return [{'id': r[0], 'code': r[1], 'name': r[2], 'province_id': r[3], 'districts': r[4]} for r in rows]
+
+
+def provinces(conn, p: Principal) -> list[dict]:
+    rows = conn.execute('''SELECT v.id,v.code,v.name FROM telco.province v
+        WHERE telco.can_access_area(%s,'province',v.id) ORDER BY v.code''', (p.principal_id,)).fetchall()
     return [{'id': r[0], 'code': r[1], 'name': r[2]} for r in rows]
 
 

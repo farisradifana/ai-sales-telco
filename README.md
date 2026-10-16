@@ -19,7 +19,7 @@ WhatsApp Cloud API ─► API ingress (/webhooks/whatsapp: HMAC raw body, skema,
                   API domain (FastAPI) ── authz default-deny (principal_grant/can_access) ── PostgreSQL 17
                          │  ticket satu-turn                      ▲ tool read-only via ticket
                          ▼                                         │
-                  Hermes Agent 0.20.5 ──► MCP bridge (6 tool bisnis, tanpa kredensial DB)
+                  Hermes Agent 0.20.5 ──► MCP bridge (7 tool bisnis, tanpa kredensial DB)
                          │
                          ▼
                   9Router 0.5.99 ──► provider model berizin (MODEL_ID dikonfigurasi pemilik akun)
@@ -39,7 +39,11 @@ Dashboard React/TS ─► API (satu evidence snapshot untuk semua chart)        
 Hierarki di `telco.org_position` / `org_territory` (migration 008, trigger validasi level atasan & cakupan). Grant
 `principal_grant` diturunkan dari cakupan (`v_org_coverage`) oleh `python -m telco_api.provision demo`; otorisasi tetap
 default-deny dan **single tenant** (tidak ada RLS multi-tenant). Pembagian East/West adalah default geografis yang perlu
-divalidasi pemilik bisnis; ubah CSV lalu generate ulang. Reversal/transfer disetujui supervisor dengan grant pada outlet
+divalidasi pemilik bisnis; ubah CSV lalu generate ulang. Diagnosis agregat **kab/kota** dan **provinsi** (migration 009,
+`telco.diagnose_area` / `telco.can_access_area`) hanya diizinkan bila akun memegang grant untuk *seluruh* kecamatan di area:
+Head of Branch → kab/kotanya, Head of Sales → 19 kab/kota areanya (bukan provinsi), Head of Region → provinsi dan 38 kab/kota;
+Territory Manager/sales ditolak. Angka kab/kota = jumlah kecamatan di dalamnya per channel (direkonsiliasi ≤ Rp0,01).
+Dashboard menampilkan cakupan Kab/Kota/Provinsi hanya bila berizin, dengan drill-through provinsi → kab/kota → kecamatan → outlet. Reversal/transfer disetujui supervisor dengan grant pada outlet
 (four-eyes: pemohon tidak boleh menyetujui sendiri).
 
 ## Dataset
@@ -86,7 +90,8 @@ API, dashboard dan stack mock: lihat `docs/RUNBOOK.md` (bagian 7). Login dashboa
 TEST_ADMIN_DATABASE_URL=postgresql://owner:…@127.0.0.1:55432/postgres TEST_TEMPLATE_DB=telco_test_jatim_v3 .venv/Scripts/python -m pytest tests -v
 ```
 
-Tes server meng-clone template ke `telco_test_clone_*` dan hanya men-drop clone tersebut. Ringkasan hasil yang benar-benar
+Tes server meng-clone template ke `telco_test_clone_*`, menerapkan migration yang lebih baru dari template (mis. 009) ke
+clone saja, dan hanya men-drop clone tersebut. Ringkasan hasil yang benar-benar
 dijalankan ada di `docs/VERIFICATION.md` dan `reports/`.
 
 ## Navigasi
@@ -105,4 +110,4 @@ dijalankan ada di `docs/VERIFICATION.md` dan `reports/`.
 - Penjualan posted immutable; koreksi = reversal penuh + pengganti; backdate ditolak kecuali jalur koreksi supervisor yang
   mengunci akun, membuktikan saldo kronologis ≥ 0 dan diaudit.
 - Semua angka di jawaban berasal dari evidence tool; narasi model yang memuat angka di luar evidence dibuang.
-- Hermes tidak punya shell/file/web/SQL/kredensial DB; hanya 6 tool bisnis read-only yang terikat ticket satu-turn.
+- Hermes tidak punya shell/file/web/SQL/kredensial DB; hanya 7 tool bisnis read-only yang terikat ticket satu-turn.

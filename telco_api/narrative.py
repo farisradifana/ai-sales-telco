@@ -34,6 +34,11 @@ def diagnose_text(e: dict) -> str:
         lines.append(f"Kontribusi terbesar SKU {d['product']} {rupiah(d['delta_idr'])}; volume {rupiah(d['volume_effect_idr'])}, "
                      f"harga/mix {rupiah(d['price_mix_effect_idr'])}, masuk/keluar {rupiah(d['entry_exit_effect_idr'])} "
                      f"(dekomposisi akuntansi, bukan sebab).")
+    areas = sorted(e.get('district_contributions') or [], key=lambda d: dec(d['delta_idr']))
+    if areas:
+        a = areas[0] if delta < 0 else areas[-1]
+        lines.append(f"Kecamatan dengan kontribusi terbesar: {a['name']} {rupiah(a['delta_idr'])} "
+                     f"({a['outlets']} outlet); drill-down ke kecamatan/outlet perlu izin per entitas.")
     c = e.get('coverage') or {}
     if c.get('visits_planned'):
         lines.append(f"Kunjungan tercatat {c.get('visits_done')} dari {c.get('visits_planned')} rencana; ini asosiasi, bukan bukti sebab.")
@@ -65,6 +70,16 @@ def ranking_text(e: dict) -> str:
     for i, d in enumerate(e['districts'][:5], 1):
         g = f" ({pct_id(d['growth'])})" if d.get('growth') is not None else ''
         out.append(f"{i}. {d['district_name']}: {rupiah(d['delta_idr'])}{g}")
+    out.append(e['next_step'])
+    out.append(f"Evidence ID {e['evidence_id']}.")
+    return '\n'.join(out)
+
+
+def regency_ranking_text(e: dict) -> str:
+    out = [f"Peringkat {CHANNEL_ID[e['channel']]} kabupaten/kota yang Anda akses, {e['current_label']} vs {e['baseline_label']}:"]
+    for i, r in enumerate(e['regencies'][:5], 1):
+        g = f" ({pct_id(r['growth'])})" if r.get('growth') is not None else ''
+        out.append(f"{i}. {r['regency_name']}: {rupiah(r['delta_idr'])}{g}")
     out.append(e['next_step'])
     out.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(out)
@@ -178,7 +193,8 @@ def scrub_identifiers(text: str, evidences: list[dict]) -> str:
 def _collect_names(obj, acc: set):
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k in ('product', 'name', 'district_name', 'code', 'sku', 'district_code') and isinstance(v, str):
+            if k in ('product', 'name', 'district_name', 'code', 'sku', 'district_code', 'regency_name', 'regency_code',
+                     'province_name') and isinstance(v, str):
                 acc.add(v)
             else:
                 _collect_names(v, acc)

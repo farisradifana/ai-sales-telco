@@ -18,11 +18,12 @@ class GetEvidenceArgs(Strict):
 
 TOOLS = {
     'get_evidence': (GetEvidenceArgs, 'Ambil evidence JSON (angka resmi) berdasarkan evidence_id milik percakapan ini.'),
-    'diagnose': (DiagnoseRequest, 'Diagnosis omzet outlet/kecamatan per channel; periode sama panjang, akhir eksklusif.'),
+    'diagnose': (DiagnoseRequest, 'Diagnosis omzet outlet/kecamatan/kab-kota/provinsi per channel; periode sama panjang, akhir eksklusif.'),
     'rank_districts': (RankRequest, 'Peringkat kecamatan yang diizinkan untuk principal ini.'),
+    'rank_regencies': (RankRequest, 'Peringkat kabupaten/kota yang seluruh kecamatannya diizinkan untuk principal ini.'),
     'stock': (StockRequest, 'Stok per akun (sales/outlet) dan satuan; tidak menjumlahkan PCS dengan IDR.'),
     'target': (TargetRequest, 'Realisasi vs target harian sales pada satu channel.'),
-    'resolve_entity': (ResolveRequest, 'Cari outlet/kecamatan dalam cakupan izin; nama ambigu butuh klarifikasi.'),
+    'resolve_entity': (ResolveRequest, 'Cari outlet/kecamatan/kab-kota/provinsi dalam cakupan izin; nama ambigu butuh klarifikasi.'),
 }
 DEFAULT_ALLOWED = list(TOOLS)
 
@@ -77,7 +78,8 @@ def execute(db, ticket: str, name: str, arguments: dict) -> dict:
         return db.write(q)
     if name == 'resolve_entity':
         return analytics.resolve_entity(db, p, args)
-    fn = {'diagnose': analytics.diagnose, 'rank_districts': analytics.rank_districts, 'stock': analytics.stock,
+    fn = {'diagnose': analytics.diagnose, 'rank_districts': analytics.rank_districts, 'rank_regencies': analytics.rank_regencies,
+          'stock': analytics.stock,
           'target': analytics.target}[name]
     out = fn(db, p, args, corr)
     db.write(lambda conn: conn.execute('UPDATE telco.agent_turn SET evidence_ids=array_append(evidence_ids,%s::uuid) WHERE ticket_hash=%s',

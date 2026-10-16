@@ -46,7 +46,7 @@ def get_evidence(ticket: str, evidence_id: str) -> str:
     return _call('get_evidence', ticket, {'evidence_id': evidence_id})
 
 
-@mcp.tool(name='diagnose', description='Diagnosis omzet outlet/kecamatan per channel; periode sama panjang, akhir eksklusif.',
+@mcp.tool(name='diagnose', description='Diagnosis omzet outlet/kecamatan/kab-kota/provinsi per channel; periode sama panjang, akhir eksklusif.',
           annotations=READ_ONLY)
 def diagnose(ticket: str, scope: str, entity_id: int, channel: str = 'sell_out', baseline_start: str | None = None,
              baseline_end: str | None = None, current_start: str | None = None, current_end: str | None = None) -> str:
@@ -58,6 +58,13 @@ def diagnose(ticket: str, scope: str, entity_id: int, channel: str = 'sell_out',
 def rank_districts(ticket: str, channel: str = 'sell_out', baseline_start: str | None = None, baseline_end: str | None = None,
                    current_start: str | None = None, current_end: str | None = None) -> str:
     return _call('rank_districts', ticket, {'channel': channel, 'baseline_start': baseline_start, 'baseline_end': baseline_end,
+                                            'current_start': current_start, 'current_end': current_end})
+
+
+@mcp.tool(name='rank_regencies', description='Peringkat kabupaten/kota yang diizinkan.', annotations=READ_ONLY)
+def rank_regencies(ticket: str, channel: str = 'sell_out', baseline_start: str | None = None, baseline_end: str | None = None,
+                   current_start: str | None = None, current_end: str | None = None) -> str:
+    return _call('rank_regencies', ticket, {'channel': channel, 'baseline_start': baseline_start, 'baseline_end': baseline_end,
                                             'current_start': current_start, 'current_end': current_end})
 
 
@@ -73,7 +80,7 @@ def target(ticket: str, channel: str, target_date: str | None = None, sales_id: 
     return _call('target', ticket, {'channel': channel, 'target_date': target_date, 'sales_id': sales_id})
 
 
-@mcp.tool(name='resolve_entity', description='Cari outlet/kecamatan dalam cakupan izin.', annotations=READ_ONLY)
+@mcp.tool(name='resolve_entity', description='Cari outlet/kecamatan/kab-kota/provinsi dalam cakupan izin.', annotations=READ_ONLY)
 def resolve_entity(ticket: str, query: str, scope: str | None = None) -> str:
     return _call('resolve_entity', ticket, {'query': query, 'scope': scope})
 

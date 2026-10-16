@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, ApiError, type Channel, type Dashboard, type Me, type PeriodInput, type ScopeType } from './api';
-import { Ranking, TrendChart, Waterfall } from './components/Charts';
-import { Actions, Banner, Contributors, Kpis, PendingPanel, StockPanel, useTarget } from './components/Panels';
+import { api, ApiError, AREA_SCOPES, type Channel, type Dashboard, type Me, type PeriodInput, type ScopeType } from './api';
+import { districtItems, Ranking, regencyItems, TrendChart, Waterfall } from './components/Charts';
+import { Actions, AreaContributors, Banner, Contributors, Kpis, PendingPanel, StockPanel, useTarget } from './components/Panels';
 import { CHANNEL_LABEL, daysBetween } from './format';
 
 interface ViewState { scope: ScopeType; id: number; channel: Channel; period: PeriodInput | null }
+const SCOPES: ScopeType[] = ['outlet', 'district', 'regency', 'province'];
+const SCOPE_LABEL: Record<ScopeType, string> = { outlet: 'Outlet', district: 'Kecamatan', regency: 'Kab/Kota', province: 'Provinsi' };
+
+// Entities the account may open per scope (from /v1/me: server-side grant checks; area = every kecamatan granted).
+function optionsFor(me: Me, scope: ScopeType): { id: number; code: string; name: string }[] {
+  return scope === 'outlet' ? me.outlets : scope === 'district' ? me.districts : scope === 'regency' ? me.regencies : me.provinces;
+}
 
 // Drill-through state lives in the URL hash so links keep scope/period/channel.
 function readHash(): Partial<ViewState> {
   const p = new URLSearchParams(window.location.hash.slice(1));
   const period = p.get('bs') ? { baseline_start: p.get('bs')!, baseline_end: p.get('be')!, current_start: p.get('cs')!, current_end: p.get('ce')! } : null;
   const scope = p.get('scope');
-  return { scope: scope === 'district' || scope === 'outlet' ? scope : undefined, id: Number(p.get('id')) || undefined,
+  return { scope: SCOPES.includes(scope as ScopeType) ? (scope as ScopeType) : undefined, id: Number(p.get('id')) || undefined,
            channel: p.get('ch') === 'sell_in' ? 'sell_in' : p.get('ch') === 'sell_out' ? 'sell_out' : undefined, period };
 }
 function writeHash(v: ViewState) {
@@ -78,9 +85,11 @@ export default function App() {
     api.me().then((m) => {
       setMe(m); setAuth('ok');
       const h = readHash();
-      const firstOutlet = m.outlets[0]?.id, firstDistrict = m.districts[0]?.id;
-      const scope: ScopeType = h.scope ?? (firstDistrict && m.role !== 'sales' ? 'district' : 'outlet');
-      const id = h.id ?? (scope === 'district' ? firstDistrict : firstOutlet);
+      // Default to the widest area the account may aggregate: provinsi > kab/kota > kecamatan > outlet.
+      const fallback: ScopeType = m.provinces.length ? 'province' : m.regencies.length ? 'regency'
+        : m.districts.length && m.role !== 'sales' ? 'district' : 'outlet';
+      const scope: ScopeType = h.scope ?? fallback;
+      const id = h.id ?? optionsFor(m, scope)[0]?.id;
       if (id) setView({ scope, id, channel: h.channel ?? 'sell_out', period: h.period ?? null });
     }).catch((e: ApiError) => { if (e.status === 401) setAuth('anon'); else { setAuthErr(e.message); setAuth('error'); } });
   }, []);
@@ -109,7 +118,7 @@ export default function App() {
   }, [view]);
 
   const target = useTarget(me, view?.channel ?? 'sell_out');
-  const options = useMemo(() => (view?.scope === 'district' ? me?.districts ?? [] : me?.outlets ?? []), [me, view?.scope]);
+  const options = useMemo(() => (me && view ? optionsFor(me, view.scope) : []), [me, view]);
 
   if (authState === 'loading') return <p className="loading page">Memuat sesi…</p>;
   if (authState === 'error') return (
@@ -120,12 +129,13 @@ export default function App() {
 
   const d = dash.data;
   const stale = !!dash.at && now - dash.at > 15 * 60000;
-  const exportHref = d ? api.exportUrl(d.scope, d.entity_id, d.channel, d.current.start, d.current.end_exclusive) : undefined;
+  const isArea = !!d && AREA_SCOPES.includes(d.scope);
+  const exportHref = d && !isArea ? api.exportUrl(d.scope, d.entity_id, d.channel, d.current.start, d.current.end_exclusive) : undefined;
 
   return (
     <div className="page">
       <header className="top">
-        <div><h1>TELCO Sales Insight</h1><p className="muted">{me.display_name}{me.org?.sales_area ? ` · Area ${me.org.sales_area}` : ''}{me.org?.manager_title ? ` · melapor ke ${me.org.manager_title}` : ''} · {me.districts.length} kecamatan · {me.outlets.length} outlet</p></div>
+        <div><h1>TELCO Sales Insight</h1><p className="muted">{me.display_name}{me.org?.sales_area ? ` · Area ${me.org.sales_area}` : ''}{me.org?.manager_title ? ` · melapor ke ${me.org.manager_title}` : ''}{me.provinces.length ? ` · ${me.provinces.length} provinsi` : ''}{me.regencies.length ? ` · ${me.regencies.length} kab/kota` : ''} · {me.districts.length} kecamatan · {me.outlets.length} outlet</p></div>
         <button type="button" className="secondary" onClick={() => api.logout().then(() => { setMe(null); setAuth('anon'); })}>Keluar</button>
       </header>
 
@@ -133,14 +143,17 @@ export default function App() {
         <label>Cakupan
           <select value={view.scope} onChange={(e) => {
             const scope = e.target.value as ScopeType;
-            const first = scope === 'district' ? me.districts[0]?.id : me.outlets[0]?.id;
+            const first = optionsFor(me, scope)[0]?.id;
             if (first) setView({ ...view, scope, id: first });
           }}>
             <option value="outlet" disabled={!me.outlets.length}>Outlet</option>
             <option value="district" disabled={!me.districts.length}>Kecamatan</option>
+            {/* Area scopes appear only when the account holds a grant on every kecamatan of at least one area. */}
+            {me.regencies.length > 0 && <option value="regency">Kab/Kota</option>}
+            {me.provinces.length > 0 && <option value="province">Provinsi</option>}
           </select>
         </label>
-        <label>{view.scope === 'district' ? 'Kecamatan' : 'Outlet'}
+        <label>{SCOPE_LABEL[view.scope]}
           <select value={view.id} onChange={(e) => setView({ ...view, id: Number(e.target.value) })}>
             {options.map((o) => <option key={o.id} value={o.id}>{o.code} · {o.name}</option>)}
           </select>
@@ -164,17 +177,31 @@ export default function App() {
       {d && !dash.error && (
         <main>
           <Banner d={d} stale={stale} />
-          <p className="crumbs">{d.scope === 'outlet' ? `Outlet ${d.entity.code} · ${d.entity.name}${d.entity.district_name ? ' · Kec. ' + d.entity.district_name : ''}` : `Kecamatan ${d.entity.name} (${d.entity.code})`}
+          <p className="crumbs">{d.scope === 'outlet' ? `Outlet ${d.entity.code} · ${d.entity.name}${d.entity.district_name ? ' · Kec. ' + d.entity.district_name : ''}`
+            : d.scope === 'district' ? `Kecamatan ${d.entity.name} (${d.entity.code})${d.entity.regency_name ? ' · ' + d.entity.regency_name : ''}`
+            : d.scope === 'regency' ? `${d.entity.name} (${d.entity.code}) · ${d.entity.district_count ?? '?'} kecamatan`
+            : `Provinsi ${d.entity.name} · ${d.entity.regency_count ?? '?'} kab/kota`}
             {' '}· {CHANNEL_LABEL[d.channel]} · {d.current_label} vs {d.baseline_label}
             {d.scope === 'outlet' && d.entity.district_id && me.districts.some((x) => x.id === d.entity.district_id) &&
               <> · <button type="button" className="link" onClick={() => setView({ ...view, scope: 'district', id: d.entity.district_id! })}>lihat kecamatan</button></>}
+            {d.scope === 'district' && d.entity.regency_id && me.regencies.some((x) => x.id === d.entity.regency_id) &&
+              <> · <button type="button" className="link" onClick={() => setView({ ...view, scope: 'regency', id: d.entity.regency_id! })}>lihat kab/kota</button></>}
+            {d.scope === 'regency' && d.entity.province_id && me.provinces.some((x) => x.id === d.entity.province_id) &&
+              <> · <button type="button" className="link" onClick={() => setView({ ...view, scope: 'province', id: d.entity.province_id! })}>lihat provinsi</button></>}
           </p>
           <Kpis d={d} target={target.data ?? null} />
           <div className="grid">
             <TrendChart d={d} />
             <Waterfall d={d} />
+            {isArea && <AreaContributors d={d}
+              canPick={(id) => (d.scope === 'province' ? me.regencies : me.districts).some((x) => x.id === id)}
+              onPick={(id) => setView({ ...view, scope: d.scope === 'province' ? 'regency' : 'district', id })} />}
             <Contributors d={d} onPick={(id) => me.outlets.some((o) => o.id === id) && setView({ ...view, scope: 'outlet', id })} />
-            <Ranking rows={d.district_ranking} current={d.scope === 'district' ? d.entity_id : undefined}
+            {me.regencies.length > 0 && <Ranking unit="kab/kota" rows={regencyItems(d.regency_ranking ?? [])}
+              current={d.scope === 'regency' ? d.entity_id : undefined} onPick={(id) => setView({ ...view, scope: 'regency', id })} />}
+            <Ranking rows={districtItems(d.scope === 'regency'
+              ? d.district_ranking.filter((r) => d.district_contributions?.some((c) => c.district_id === r.district_id))
+              : d.district_ranking)} current={d.scope === 'district' ? d.entity_id : undefined}
               onPick={(id) => setView({ ...view, scope: 'district', id })} />
             <Actions d={d} />
             <StockPanel me={me} outletId={d.scope === 'outlet' ? d.entity_id : null} />

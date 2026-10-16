@@ -14,8 +14,8 @@ Diverifikasi 16 Oktober 2026 terhadap instalasi lokal dan repository resmi.
 - `GET /health` (tanpa auth), `GET /v1/capabilities`, `GET /v1/toolsets`, `POST /v1/chat/completions` — Bearer `API_SERVER_KEY`, port default 8642, bind default 127.0.0.1.
 - API server Hermes **secara default memberi akses penuh ke toolset agent, termasuk terminal**. Karena itu
   `deploy/hermes/render_home.py` menulis `agent.disabled_toolsets` berisi seluruh toolset bawaan (dikurangkan setelah semua
-  aturan platform) dan `platform_toolsets.api_server: []`. Satu-satunya tool adalah `mcp_servers.telco` (include-list 6 tool,
-  `trust: untrusted`, resources/prompts off). Memory Hermes dimatikan: konteks resmi ada di tabel `conversation_context`.
+  aturan platform) dan `platform_toolsets.api_server: []`. Satu-satunya tool adalah `mcp_servers.telco` (include-list 7 tool,
+  `trust: full` karena bug readOnlyHint upstream — lihat VERIFICATION, resources/prompts off). Memory Hermes dimatikan: konteks resmi ada di tabel `conversation_context`.
 - **Capability probe** (`telco_api/agent.py::HermesAdapter.probe`) memanggil `/health`, `/v1/capabilities` dan `/v1/toolsets` pada
   versi yang berjalan. Jika ada toolset bawaan yang `enabled`, atau `chat_completions` tidak tersedia, API menolak memakai Hermes.
   Hasil nyata pada Hermes 0.20.5 dengan config ini: **0 dari 28 toolset bawaan aktif**; MCP bridge terhubung.

@@ -69,7 +69,7 @@ mcp_servers:
     # approval surface) fails closed. Revisit when upstream fixes tools/mcp_tool.py::_annotation_read_only_hint.
     trust: full
     tools:
-      include: [get_evidence, diagnose, rank_districts, stock, target, resolve_entity]
+      include: [get_evidence, diagnose, rank_districts, rank_regencies, stock, target, resolve_entity]
       resources: false
       prompts: false
 """, encoding='utf-8')

@@ -151,6 +151,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
             org = {'code': o[0], 'level': o[1], 'title': o[2], 'sales_area': o[3], 'manager_title': o[4], 'manager_level': o[5]} if o else None
             return {'principal_id': p.principal_id, 'role': p.role, 'display_name': p.display_name, 'sales_id': p.sales_id, 'org': org,
                     'outlets': authz.outlets(conn, p), 'districts': authz.districts(conn, p),
+                    'regencies': authz.regencies(conn, p), 'provinces': authz.provinces(conn, p),
                     'watermarks': {r[0]: str(r[1]) for r in conn.execute('SELECT source,complete_through FROM telco.ingestion_watermark')}}
         return database.read(q)
 
@@ -162,6 +163,10 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
     @app.post('/v1/tools/rank-districts')
     def t_rank(body: RankRequest, request: Request, p: Principal = Depends(principal)):
         return analytics.rank_districts(database, p, body, corr(request))
+
+    @app.post('/v1/tools/rank-regencies')
+    def t_rank_regencies(body: RankRequest, request: Request, p: Principal = Depends(principal)):
+        return analytics.rank_regencies(database, p, body, corr(request))
 
     @app.post('/v1/tools/stock')
     def t_stock(body: StockRequest, request: Request, p: Principal = Depends(principal)):

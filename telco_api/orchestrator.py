@@ -129,6 +129,9 @@ class Pipeline:
         if name == 'target':
             e = analytics.target(self.db, p, TargetRequest(channel=slots['channel']), corr)
             return {'next': 'reply', 'intent': name, 'text': narrative.target_text(e), 'evidence_id': e['evidence_id']}
+        if name == 'rank_regencies':
+            e = analytics.rank_regencies(self.db, p, RankRequest(channel=slots['channel']), corr)
+            return {'next': 'reply', 'intent': name, 'text': narrative.regency_ranking_text(e), 'evidence_id': e['evidence_id']}
         if name == 'rank_districts':
             e = analytics.rank_districts(self.db, p, RankRequest(channel=slots['channel']), corr)
             return {'next': 'reply', 'intent': name, 'text': narrative.ranking_text(e), 'evidence_id': e['evidence_id']}

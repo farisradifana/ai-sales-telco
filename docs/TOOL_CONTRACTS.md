@@ -5,8 +5,11 @@ Adapter Python `telco/tools.py` adalah backend tool reference, bukan server HTTP
 | Endpoint / tool | Input domain | Hasil / side effect |
 |---|---|---|
 | GET /health/live, /health/ready | none | liveness, readiness DB/queue/upstream (tanpa secrets) |
-| POST /v1/tools/diagnose | scope=outlet/district, entity_id integer, channel=sell_in/sell_out, baseline/current start/end | authorize scope; read-only repeatable-read snapshot; evidence, drivers, action hypotheses, digest |
+| POST /v1/tools/diagnose | scope=outlet/district/regency/province, entity_id integer, channel=sell_in/sell_out, baseline/current start/end | authorize scope (`can_access_area`) **sebelum** query; read-only repeatable-read snapshot; evidence, drivers, action hypotheses, digest. regency/province memakai `telco.diagnose_area` (`query_version=diagnose-area-v1`) dan menambah `district_contributions` (+ `regency_contributions` untuk provinsi) serta `drill_down` |
 | POST /v1/tools/rank-districts | channel, dua periode setara | hanya kecamatan yang di-grant; list baseline/current/delta/growth, lanjut diagnosis coverage sebelum keputusan |
+| POST /v1/tools/rank-regencies | channel, dua periode setara | hanya kab/kota yang **seluruh** kecamatannya di-grant (HoB 1, HoS 19, HoR 38; TM/sales 403); baseline/current/delta/growth/coverage per kab/kota |
+| POST /v1/tools/dashboard | scope (4 jenis), entity_id, channel, periode | satu evidence untuk semua chart; `district_ranking` + `regency_ranking` hanya entitas berizin |
+| GET /v1/me | — | `outlets`, `districts`, `regencies`, `provinces` berizin (dashboard hanya menampilkan cakupan Kab/Kota/Provinsi bila daftarnya tidak kosong) |
 | POST /v1/tools/stock | account_id, product_id, as_of | authorize account sales/outlet; numeric dan satuan; jangan memaparkan stok pihak lain |
 | POST /v1/tools/target | tanggal, channel | principal→sales mapping server; actual/target/gap/achievement; jangan sum channel |
 | POST /v1/contexts | evidence_id, opaque conversation key | backend menyimpan evidence hasil tool, bukan angka supplied LLM; TTL 24h |
@@ -15,6 +18,14 @@ Adapter Python `telco/tools.py` adalah backend tool reference, bukan server HTTP
 | POST /v1/transactions/sell-out | fields sama + customer_token SYN untuk demo | scope auth; whitelist price/discount policy; atomic posting |
 | POST /v1/reversals | channel, transaction_id, external_key, occurred_at, reason | supervisor authorization, explicit confirmation reference, full reversal, audit |
 | GET/POST /webhooks/whatsapp | provider-specific verification / signed payload | validasi signature raw body, dedup provider+message_id+hash, enqueue lalu ACK |
+
+### Scope area: kab/kota dan provinsi (migration 009)
+
+`telco.can_access_area(principal, scope, id)`: outlet/district = `can_access`; regency/province = true **hanya** bila principal punya grant `district` untuk SEMUA kecamatan di area (termasuk kecamatan tanpa outlet), selain itu false (default-deny; principal NULL/scope tak dikenal = false). Grant tetap hanya level outlet/district di `principal_grant`, diturunkan dari `v_org_coverage`; tidak ada grant regency/province. Mencabut satu kecamatan langsung memblokir agregat kab/kota, evidence lama, dan follow-up konteks kab/kota.
+
+`telco.diagnose_area(scope, id, channel, b0, b1, c0, c1)` meniru kontrak `diagnose` (002): validasi periode identik, populasi tetap seluruh outlet di area (termasuk yang tidak bertransaksi), coverage current + baseline, driver Shapley per SKU, `outlet_contributions`, `district_contributions` (kecamatan yang memiliki outlet), `regency_contributions`, watermark/batch. API menolak (500, tidak dikirim) bila Σ driver, Σ outlet, Σ kecamatan, atau Σ kab/kota berbeda dari `delta_idr` lebih dari Rp0,01. Satu channel per panggilan; sell-in dan sell-out tidak pernah dijumlah. `growth` null bila baseline ≤ 0. `telco.rank_regencies` menghitung per kab/kota yang memiliki outlet; API memfilter dengan `can_access_area` di dalam SQL sehingga baris tak berizin tidak keluar dari database.
+
+Follow-up: dari konteks outlet/kecamatan, "kabupatennya?" pindah ke kab/kota induk setelah `can_access_area` ulang (TM/sales → 403). Dari konteks kab/kota/provinsi, "kecamatannya?" = `needs_clarification` berisi daftar kecamatan kontributor (tidak menebak). Konteks area dengan `query_version=diagnose-area-v1` tidak dianggap stale. Agent tool `rank_regencies` dan `resolve_entity` (scope regency/province, hanya entitas berizin) tersedia di MCP bridge.
 
 `rank-districts` tidak boleh memanggil function global lalu memberikan seluruh hasil ke LLM sales terbatas. Filter daftar ID dengan grant **sebelum** serialisasi, evidence logging, cache, maupun model call. Outlet-only principal tidak otomatis berhak melihat seluruh kecamatan. Tool target/stock harus menerapkan kepemilikan yang setara. Tidak ada endpoint supply publik; receipts lewat ingestion/admin yang dibuktikan sumbernya.
 
@@ -38,7 +49,7 @@ Response error: 400 input/periode/entitas ambigu; 401 unauthenticated; 403 scope
 2. Simpan context opaque dengan **principal dari session tepercaya**, entity/channel/period, evidence+hash, query version, watermark+batch. `save_context` menyimpan snapshot dan audit; versi optimistic melindungi tab/chat serentak.
 3. “Apa yang harus dilakukan?” → retrieve menggunakan context_id dan principal yang sama; `follow_up` menolak principal lain/expired; API juga reauthorize scope lewat can_access. Jangan membuat lookup global “latest context”.
 4. Jika watermark/batch/query version berubah, recompute dengan periode/scope sama, simpan memakai expected_version. Jika izin dicabut, tolak walaupun evidence pernah dibaca sebelumnya. Prompt injection dalam pesan atau nama outlet tidak dapat mengubah grant/tool allowlist.
-5. “Kalau kecamatannya?” → ambil district outlet yang sama, reauthorize scope district; jika tidak berhak jangan tampilkan agregat. “Bulan lalu?” → perlu periode baru hari setara dan sebutkan tanggal aktualnya. Jika lebih dari satu referen, klarifikasi sebelum tool.
+5. “Kalau kecamatannya?” → ambil district outlet yang sama, reauthorize scope district; jika tidak berhak jangan tampilkan agregat. “Kalau kabupatennya?” → kab/kota induk, reauthorize `can_access_area` (semua kecamatan harus berizin). “Bulan lalu?” → perlu periode baru hari setara dan sebutkan tanggal aktualnya. Jika lebih dari satu referen, klarifikasi sebelum tool.
 
 Context produksi juga perlu ringkasan percakapan seperlunya dan last turn IDs, disimpan dalam store terenkripsi terpisah tanpa PII mentah di LLM logs. Tabel context paket ini menyimpan **konteks analisis terstruktur**, bukan transkrip WhatsApp lengkap. Tambah conversation_turn via migration jika diperlukan. Auth/phone mapping dan secrets berada di service identity, tidak disimpan sebagai nomor pelanggan dalam transaksi demo.
 

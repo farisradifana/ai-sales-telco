@@ -11,6 +11,7 @@ from .security import Principal
 
 ACTION_Q = re.compile(r'apa yang harus|solusi|saran|rekomendasi|langkah|tindakan|harus (saya|kami) (lakukan|apa)|what should', re.I)
 DISTRICT_Q = re.compile(r'kecamatan', re.I)
+REGENCY_Q = re.compile(r'\bkab(upaten)?(nya)?\b|kab/kota|\bkotanya\b', re.I)
 PERIOD_Q = re.compile(r'bulan lalu|minggu lalu|tahun lalu|periode lain|kuartal|bulan (sebelumnya|kemarin)', re.I)
 OTHER_ENTITY_Q = re.compile(r'\b(OUT-\d{1,6}|FX-D\d{2})\b', re.I)
 CHANNEL_Q = re.compile(r'sell[- ]?(in|out)', re.I)
@@ -100,8 +101,23 @@ def follow_up(db, p: Principal, context_id: str, question: str, expected_version
         if not db.read(lambda conn: authz.can_access(conn, p, 'district', did)):
             raise errors.denied('Anda tidak memiliki izin agregat kecamatan untuk outlet ini.')
         new_scope = {'type': 'district', 'id': did}
+    elif DISTRICT_Q.search(question) and scope['type'] in analytics.AREA_SCOPES:
+        # "kecamatannya" from a kab/kota/provinsi is ambiguous: list kecamatan from the pinned evidence, do not guess one.
+        e = db.write(lambda conn: evidence.load(conn, p, str(r[7])))
+        names = ', '.join(c['name'] for c in (e.get('district_contributions') or [])[:5])
+        return {'status': 'needs_clarification', 'context_id': context_id, 'version': r[8],
+                'message': 'Konteks ini mencakup beberapa kecamatan; sebutkan kecamatan yang dimaksud'
+                           + (f' (kontribusi terbesar dulu: {names}).' if names else '.')}
+    elif REGENCY_Q.search(question) and scope['type'] in ('outlet', 'district'):
+        rid = db.read(lambda conn: conn.execute('''SELECT d.regency_id FROM telco.district d WHERE d.id=
+            (CASE WHEN %s='outlet' THEN (SELECT district_id FROM telco.outlet WHERE id=%s) ELSE %s END)''',
+                                                (scope['type'], scope['id'], scope['id'])).fetchone()[0])
+        if not db.read(lambda conn: authz.can_access(conn, p, 'regency', rid)):
+            raise errors.denied('Anda tidak memiliki izin agregat kabupaten/kota untuk cakupan ini.')
+        new_scope = {'type': 'regency', 'id': rid}
 
-    stale = (wm is None or r[10] is None or wm[0] != r[10] or wm[1] != r[11] or r[12] != analytics.QUERY_VERSION)
+    stale = (wm is None or r[10] is None or wm[0] != r[10] or wm[1] != r[11]
+             or r[12] != analytics.query_version_for(scope['type']))
     if new_scope or stale:
         target = new_scope or scope
         req = DiagnoseRequest(scope=target['type'], entity_id=target['id'], channel=metric, baseline_start=b0, baseline_end=b1,

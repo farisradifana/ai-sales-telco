@@ -8,6 +8,8 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, Str
 
 Channel = Literal['sell_in', 'sell_out']
 ScopeType = Literal['outlet', 'district']
+# Analytical scopes: regency (kabupaten/kota) and province need a district grant on EVERY kecamatan in the area.
+AreaScope = Literal['outlet', 'district', 'regency', 'province']
 MoneyStr = Annotated[str, StringConstraints(pattern=r'^\d{1,14}(\.\d{1,4})?$')]
 ExternalKey = Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9][A-Za-z0-9._:-]{5,119}$')]
 ConversationKey = Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9._:-]{8,128}$')]
@@ -39,7 +41,7 @@ class PeriodPair(Strict):
 
 
 class DiagnoseRequest(PeriodPair):
-    scope: ScopeType
+    scope: AreaScope
     entity_id: StrictInt = Field(ge=1, le=10_000_000)
     channel: Channel = 'sell_out'
 
@@ -64,11 +66,11 @@ class TargetRequest(Strict):
 
 class ResolveRequest(Strict):
     query: Annotated[str, StringConstraints(min_length=2, max_length=80)]
-    scope: ScopeType | None = None
+    scope: AreaScope | None = None
 
 
 class DashboardRequest(PeriodPair):
-    scope: ScopeType
+    scope: AreaScope
     entity_id: StrictInt = Field(ge=1)
     channel: Channel
 

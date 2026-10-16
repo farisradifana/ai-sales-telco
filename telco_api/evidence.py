@@ -62,8 +62,10 @@ def load(conn, p: Principal, evidence_id: str, *, reauthorize: bool = True) -> d
         raise errors.not_found('Evidence tidak ditemukan.')
     payload = row[4] if isinstance(row[4], dict) else json_loads(row[4])
     if reauthorize:
-        if row[2] in ('outlet', 'district'):
+        if row[2] in ('outlet', 'district', 'regency', 'province'):
             authz.require(conn, p, row[2], row[3])
         for d in payload.get('districts', []) or []:
             authz.require(conn, p, 'district', d['district_id'])
+        for r in (payload.get('regencies') or []) + (payload.get('regency_ranking') or []):
+            authz.require(conn, p, 'regency', r['regency_id'])
     return payload

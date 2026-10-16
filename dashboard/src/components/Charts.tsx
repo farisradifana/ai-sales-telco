@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import type { Dashboard, RankRow } from '../api';
+import type { Dashboard, RankRow, RegencyRankRow } from '../api';
 import { dayLabel, pct, rupiah } from '../format';
 
 const C = { base: '#64748b', cur: '#2563eb', neg: '#dc2626', pos: '#16a34a', miss: '#cbd5e1' };
@@ -99,33 +99,42 @@ export function Waterfall({ d }: { d: Dashboard }) {
   );
 }
 
-export function Ranking({ rows, onPick, current }: { rows: RankRow[]; onPick: (id: number) => void; current?: number }) {
+export interface RankItem { id: number; name: string; delta_idr: string; growth: string | null }
+export const districtItems = (rows: RankRow[]): RankItem[] =>
+  rows.map((r) => ({ id: r.district_id, name: r.district_name, delta_idr: r.delta_idr, growth: r.growth }));
+export const regencyItems = (rows: RegencyRankRow[]): RankItem[] =>
+  rows.map((r) => ({ id: r.regency_id, name: r.regency_name, delta_idr: r.delta_idr, growth: r.growth }));
+
+// One ranking chart for kecamatan and kab/kota; rows are already filtered server-side to what the account may see.
+export function Ranking({ rows, onPick, current, unit = 'kecamatan' }:
+  { rows: RankItem[]; onPick: (id: number) => void; current?: number; unit?: 'kecamatan' | 'kab/kota' }) {
+  const hid = unit === 'kecamatan' ? 'rk-h' : 'rkr-h';
   if (!rows.length) {
-    return <section className="card" aria-labelledby="rk-h"><h2 id="rk-h">Peringkat kecamatan</h2><p className="empty">Tidak ada kecamatan yang diizinkan untuk akun ini.</p></section>;
+    return <section className="card" aria-labelledby={hid}><h2 id={hid}>Peringkat {unit}</h2><p className="empty">Tidak ada {unit} yang diizinkan untuk akun ini.</p></section>;
   }
   const data = rows.map((r) => ({ ...r, delta: Number(r.delta_idr) }));
   return (
-    <section className="card" aria-labelledby="rk-h">
-      <h2 id="rk-h">Peringkat kecamatan (yang Anda akses)</h2>
-      <p className="muted">Peringkat bukan dasar tindakan: diagnosis coverage dan kontribusi outlet dulu. Klik untuk drill-down.</p>
-      <div className="chart" role="img" aria-label="Perubahan omzet per kecamatan">
+    <section className="card" aria-labelledby={hid}>
+      <h2 id={hid}>Peringkat {unit} (yang Anda akses)</h2>
+      <p className="muted">Peringkat bukan dasar tindakan: diagnosis coverage dan kontribusi {unit === 'kecamatan' ? 'outlet' : 'kecamatan'} dulu. Klik untuk drill-down.</p>
+      <div className="chart" role="img" aria-label={`Perubahan omzet per ${unit}`}>
         <ResponsiveContainer width="100%" height={Math.max(160, 28 * data.length)}>
           <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
             <XAxis type="number" tickFormatter={compact} tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="district_name" width={130} tick={{ fontSize: 11 }} />
+            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} />
             <ReferenceLine x={0} stroke="#94a3b8" />
             <Tooltip formatter={(v) => [rupiah(String(v)), 'Δ omzet']} />
-            <Bar dataKey="delta" isAnimationActive={false} onClick={(x) => onPick((x as unknown as RankRow).district_id)} cursor="pointer">
-              {data.map((r) => <Cell key={r.district_id} fill={r.district_id === current ? '#7c3aed' : r.delta < 0 ? C.neg : C.pos} />)}
+            <Bar dataKey="delta" isAnimationActive={false} onClick={(x) => onPick((x as unknown as RankItem).id)} cursor="pointer">
+              {data.map((r) => <Cell key={r.id} fill={r.id === current ? '#7c3aed' : r.delta < 0 ? C.neg : C.pos} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
       <ul className="linklist">
         {rows.map((r) => (
-          <li key={r.district_id}>
-            <button type="button" className="link" onClick={() => onPick(r.district_id)} aria-label={`Drill-down kecamatan ${r.district_name}`}>
-              {r.district_name}</button>: {rupiah(r.delta_idr)} ({pct(r.growth)})
+          <li key={r.id}>
+            <button type="button" className="link" onClick={() => onPick(r.id)} aria-label={`Drill-down ${unit} ${r.name}`}>
+              {r.name}</button>: {rupiah(r.delta_idr)} ({pct(r.growth)})
           </li>
         ))}
       </ul>
