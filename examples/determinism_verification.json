@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "seed": 42,
+  "rows": 500000,
+  "comparison": "All 14 CSV hashes, byte sizes and manifest metadata identical across two full generations",
+  "python": "CPython 3.12"
+}

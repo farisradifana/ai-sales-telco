@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "engine": "PGlite 0.3.14",
+  "postgres_version": "PostgreSQL 17.5 on aarch64-unknown-linux-gnu, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit",
+  "migration_sha256": {
+    "001_core.sql": "c52871d5e8814c2ac81e1557507a0b54b2bde8082c03a960423c73e033eb70e8",
+    "002_analytics.sql": "ba13a441111dd479cd8e377c924caac1039d9dc98d4f16825d4cbd98d7457ba8",
+    "003_reporting.sql": "f10cb9b97683e708f3c04c08044cd333d305a83b2dc3088308e82c4cbac8f46b",
+    "004_access.sql": "dec8667d3c02441b773a20af77fb75834b7f4fd54d0a7d3672ef511700d051c7"
+  },
+  "checks": [
+    "all final migrations executable",
+    "volume-price effect fixture exact",
+    "entry/exit bucket exact",
+    "outlet contributions reconcile",
+    "batch lineage present",
+    "rank computation and invalid-period rejection",
+    "missing coverage recorded",
+    "SQL stock and KPI audit",
+    "restricted reader can diagnose",
+    "restricted writer can reverse"
+  ]
+}

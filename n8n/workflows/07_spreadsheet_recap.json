@@ -1,0 +1,249 @@
+{
+  "id": "telco07recap000001",
+  "name": "TELCO 07 Spreadsheet recap (export snapshot)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "params",
+      "name": "Recap params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s",
+              "name": "scope",
+              "type": "string",
+              "value": "district"
+            },
+            {
+              "id": "e",
+              "name": "entity_id",
+              "type": "number",
+              "value": 1
+            },
+            {
+              "id": "c",
+              "name": "channel",
+              "type": "string",
+              "value": "sell_out"
+            },
+            {
+              "id": "a",
+              "name": "start",
+              "type": "string",
+              "value": "={{ $now.setZone('Asia/Jakarta').minus({days: 30}).toISODate() }}"
+            },
+            {
+              "id": "b",
+              "name": "end",
+              "type": "string",
+              "value": "={{ $now.setZone('Asia/Jakarta').toISODate() }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "export-csv",
+      "name": "Export CSV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoRecapJwt",
+          "name": "TELCO recap principal JWT"
+        }
+      },
+      "parameters": {
+        "method": "GET",
+        "url": "http://api:8000/v1/exports/sales.csv",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            },
+            {
+              "name": "entity_id",
+              "value": "={{ $json.entity_id }}"
+            },
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            },
+            {
+              "name": "start",
+              "value": "={{ $json.start }}"
+            },
+            {
+              "name": "end",
+              "value": "={{ $json.end }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "csv"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "rows",
+      "name": "CSV to rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\nconst text = $input.first().json.csv || '';\nconst lines = text.split('\\n').filter(l => l.length);\nconst meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\nconst data = lines.filter(l => !l.startsWith('# '));\nconst header = data.shift().split(',');\nconst rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\nreturn [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];"
+      }
+    },
+    {
+      "id": "sheet",
+      "name": "Write Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Rekap"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Recap params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recap params": {
+      "main": [
+        [
+          {
+            "node": "Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export CSV": {
+      "main": [
+        [
+          {
+            "node": "CSV to rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CSV to rows": {
+      "main": [
+        [
+          {
+            "node": "Write Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "telcoGeneratedBy": "n8n/build_workflows.py"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "telco-sales-ai-db-verification",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {"verify:pg-wasm": "node tests/pglite_verify.mjs", "test:pg-smoke": "node tests/pglite_smoke.mjs"},
+  "devDependencies": {"@electric-sql/pglite": "0.3.14"}
+}

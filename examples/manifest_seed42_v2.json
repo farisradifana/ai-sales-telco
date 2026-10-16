@@ -1,0 +1,93 @@
+{
+  "generator_version": "2.0.0",
+  "regions": {
+    "source": "cahyadsn/wilayah@d68e8d5 (Kepmendagri 300.2.2-2430/2025)",
+    "sha256": "01f671e3d2c8bf969cb79baeffc5a93a4adc71f1c839a16c900bd8cbb579919d",
+    "scope": "Provinsi Jawa Timur: 38 kabupaten/kota, 666 kecamatan"
+  },
+  "seed": 42,
+  "rows": 500000,
+  "sell_in_rows": 100000,
+  "sell_out_rows": 400000,
+  "period": [
+    "2025-01-01",
+    "2026-09-30"
+  ],
+  "timezone": "Asia/Jakarta",
+  "python_rng": "random.Random / CPython 3.12 (pin for byte reproducibility)",
+  "grain": "One completed product line per transaction ID",
+  "counts": {
+    "province": 1,
+    "regency": 38,
+    "district": 666,
+    "sales": 12,
+    "stock_account": 132,
+    "outlet": 120,
+    "assignment": 120,
+    "product": 6,
+    "sales_target": 15312,
+    "outlet_day": 76560,
+    "supply": 100000,
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ingestion_watermark": 2
+  },
+  "files": {
+    "assignment.csv": {
+      "sha256": "b68534d83ccb468d314ab37076b138d9ee3457ae7bba37672b00f0b0ba3611f2",
+      "bytes": 3696
+    },
+    "district.csv": {
+      "sha256": "82a215f31e6a72102831f3d7a0cfc68c6adabfb41d15ebdf005a4df48413c70b",
+      "bytes": 16126
+    },
+    "ingestion_watermark.csv": {
+      "sha256": "84913a594e1dab324340b767e0098c850da752919f62abee866599b672154269",
+      "bytes": 104
+    },
+    "outlet.csv": {
+      "sha256": "9e437ed06040c6e76bc877b760e79a9bb43688503a79e4c4e5cf1fd36bab4891",
+      "bytes": 13644
+    },
+    "outlet_day.csv": {
+      "sha256": "57734751bc0fe197673810473fe9c2052be352d185766376a614fda2cc8bf516",
+      "bytes": 5902911
+    },
+    "product.csv": {
+      "sha256": "eddb2197df05ea0568a7f16427960c6cf36fcb33c9fbb019da0ef1c3e019b3cf",
+      "bytes": 465
+    },
+    "province.csv": {
+      "sha256": "a3ac7ca69212f5572296fb2a0fd3709d8dbf2cd251098f180dff192f34f17279",
+      "bytes": 29
+    },
+    "regency.csv": {
+      "sha256": "9753edc847606cd5cf1e48834bb79c9deff7c385d2f4aece9da4fc85e92f5530",
+      "bytes": 1096
+    },
+    "sales.csv": {
+      "sha256": "5914f630b55de0c9d91d50336f7cafb0770c2b980c0d7c70a32dc878430b5895",
+      "bytes": 396
+    },
+    "sales_target.csv": {
+      "sha256": "4ceedb177f829ab9640cbba4eebdd90d39fedd6f7009ab55276dc3bf8b7f8463",
+      "bytes": 1313055
+    },
+    "sell_in.csv": {
+      "sha256": "3fb59782eb481f5f380424c624dc8f6e716227e0491a790527ef0edd25e74bfd",
+      "bytes": 6648775
+    },
+    "sell_out.csv": {
+      "sha256": "7deae5afea1e5c167afe35ca7954c5201ca88f6597e21f5db9de91524ad1b4a9",
+      "bytes": 35806760
+    },
+    "stock_account.csv": {
+      "sha256": "48769f1ee935670daa75787db1152535470acd7242eb17c2be85fb4aee77d7d5",
+      "bytes": 1180
+    },
+    "supply.csv": {
+      "sha256": "56873497463fce3ddbdceaa59db81ec5786a5a2dca624b5ef07589a4c715b92e",
+      "bytes": 8614756
+    }
+  }
+}

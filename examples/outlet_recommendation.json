@@ -1,0 +1,36 @@
+{
+  "data_ready": true,
+  "actions": [
+    {
+      "priority": 1,
+      "action": "Jadwalkan kunjungan verifikasi outlet dan tanyakan kendala; uji pemulihan kunjungan pada outlet pembanding.",
+      "evidence": [
+        "delta_idr",
+        "coverage.visits_done",
+        "coverage.visits_planned"
+      ],
+      "owner": "Sales Supervisor",
+      "review_in_days": 7,
+      "success_metric": "Visit completion >= 80%; compare sell-out/day vs matched controls",
+      "confidence": "hypothesis; visits and sales co-occur, causality unproven"
+    },
+    {
+      "priority": 2,
+      "action": "Audit volume dan harga efektif SKU dengan kontribusi negatif terbesar; cek ketersediaan fisik dan permintaan sebelum mengubah stok/harga.",
+      "product_id": 4,
+      "evidence": [
+        "drivers[0]"
+      ],
+      "owner": "Sales + Trade Marketing",
+      "review_in_days": 7,
+      "success_metric": "SKU net revenue/day and effective price; guardrail discount cost",
+      "confidence": "accounting contribution verified; underlying demand unknown"
+    }
+  ],
+  "limitations": [
+    "Decomposition is not causal attribution.",
+    "Stockout is unknown when observed_stockout_minutes is null; zero closing balance is not proof of lost demand.",
+    "Price effect includes discounts and within-SKU mix; taxes, COGS and competitor data absent.",
+    "No uplift forecast or confidence interval without an experiment/model; actions need human review."
+  ]
+}

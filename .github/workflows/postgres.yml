@@ -1,0 +1,35 @@
+name: PostgreSQL verification
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: telco_owner
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: telco_test_ci
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U telco_owner -d telco_test_ci" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://telco_owner:test-only-password@localhost:5432/telco_test_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      # Separate full dataset DB so integration fixture does not contaminate the load.
+      - run: psql "$DATABASE_URL" -c 'CREATE DATABASE telco_test_full'
+      - name: Full dataset validation
+        env:
+          DATABASE_URL: postgresql://telco_owner:test-only-password@localhost:5432/telco_test_full
+        run: |
+          python -m telco.generate --out data/ci --seed 42
+          python -m telco.validate_csv data/ci
+          python -m telco.db migrate
+          python -m telco.db load --data data/ci
+          python -m telco.db validate
+          python -m telco.tools --scope district --id 1

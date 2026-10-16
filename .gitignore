@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+data/full/
+data/test*/
+node_modules/
+.local/
+data/regenerated/
+reports/tmp/
+dashboard/node_modules/
+dashboard/dist/
+*.pyc
+.pytest_cache/
+Bahan/
+data/archive_v1_fictional/

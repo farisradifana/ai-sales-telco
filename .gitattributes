@@ -1,0 +1,2 @@
+*.csv -text
+*.sql text eol=lf

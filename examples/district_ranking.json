@@ -1,0 +1,98 @@
+[
+  {
+    "district_id": 1,
+    "district_name": "Kecamatan Simulasi 01",
+    "baseline_idr": "92161000.00",
+    "current_idr": "17164900.00",
+    "delta_idr": "-74996100.00",
+    "growth": "-0.81375093586224107811"
+  },
+  {
+    "district_id": 4,
+    "district_name": "Kecamatan Simulasi 04",
+    "baseline_idr": "98018200.00",
+    "current_idr": "93996100.00",
+    "delta_idr": "-4022100.00",
+    "growth": "-0.04103421609456203032"
+  },
+  {
+    "district_id": 12,
+    "district_name": "Kecamatan Simulasi 12",
+    "baseline_idr": "99583200.00",
+    "current_idr": "99013100.00",
+    "delta_idr": "-570100.00",
+    "growth": "-0.00572486122157151005"
+  },
+  {
+    "district_id": 8,
+    "district_name": "Kecamatan Simulasi 08",
+    "baseline_idr": "95903300.00",
+    "current_idr": "97246000.00",
+    "delta_idr": "1342700.00",
+    "growth": "0.01400056098173889741"
+  },
+  {
+    "district_id": 5,
+    "district_name": "Kecamatan Simulasi 05",
+    "baseline_idr": "104648800.00",
+    "current_idr": "106091800.00",
+    "delta_idr": "1443000.00",
+    "growth": "0.01378897799114753346"
+  },
+  {
+    "district_id": 3,
+    "district_name": "Kecamatan Simulasi 03",
+    "baseline_idr": "95092700.00",
+    "current_idr": "96805500.00",
+    "delta_idr": "1712800.00",
+    "growth": "0.01801189786387388306"
+  },
+  {
+    "district_id": 9,
+    "district_name": "Kecamatan Simulasi 09",
+    "baseline_idr": "101461700.00",
+    "current_idr": "105492400.00",
+    "delta_idr": "4030700.00",
+    "growth": "0.03972632037507749230"
+  },
+  {
+    "district_id": 6,
+    "district_name": "Kecamatan Simulasi 06",
+    "baseline_idr": "111050700.00",
+    "current_idr": "115358600.00",
+    "delta_idr": "4307900.00",
+    "growth": "0.03879219131441764888"
+  },
+  {
+    "district_id": 7,
+    "district_name": "Kecamatan Simulasi 07",
+    "baseline_idr": "93954200.00",
+    "current_idr": "100017400.00",
+    "delta_idr": "6063200.00",
+    "growth": "0.06453357061206417595"
+  },
+  {
+    "district_id": 2,
+    "district_name": "Kecamatan Simulasi 02",
+    "baseline_idr": "98810600.00",
+    "current_idr": "104892300.00",
+    "delta_idr": "6081700.00",
+    "growth": "0.06154906457404367548"
+  },
+  {
+    "district_id": 11,
+    "district_name": "Kecamatan Simulasi 11",
+    "baseline_idr": "92052100.00",
+    "current_idr": "102795100.00",
+    "delta_idr": "10743000.00",
+    "growth": "0.11670564821443508622"
+  },
+  {
+    "district_id": 10,
+    "district_name": "Kecamatan Simulasi 10",
+    "baseline_idr": "91131200.00",
+    "current_idr": "103062000.00",
+    "delta_idr": "11930800.00",
+    "growth": "0.13091893884860508805"
+  }
+]

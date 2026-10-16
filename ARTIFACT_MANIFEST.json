@@ -1,0 +1,238 @@
+{
+  "package": "TELCO Sales AI database-first",
+  "synthetic_only": true,
+  "files": {
+    ".env.example": {
+      "bytes": 142,
+      "sha256": "2ec596deff5d07a8be9841cd6ccde056e767c68e2c8a654016e534cdadd0d6ef"
+    },
+    ".github/workflows/postgres.yml": {
+      "bytes": 1426,
+      "sha256": "733b02dcb2f5acf9b292fbc454b158a5e9ff1ec898a5a706456d4fe5ad7e4056"
+    },
+    ".gitignore": {
+      "bytes": 62,
+      "sha256": "a6db26163206545a4064e3abf57929d679200c8d0dc7cde7464a89d4d6602b56"
+    },
+    "compose.yaml": {
+      "bytes": 465,
+      "sha256": "e16f9caf2630e3a0e0fbfe6a2e7c23dd8f45171453e27289d974eb0534e1fb4b"
+    },
+    "data/full/assignment.csv": {
+      "bytes": 3696,
+      "sha256": "b68534d83ccb468d314ab37076b138d9ee3457ae7bba37672b00f0b0ba3611f2"
+    },
+    "data/full/district.csv": {
+      "bytes": 423,
+      "sha256": "0ae731424292a66a49b8309723ffd12720ef65e0d86b51f15a413aaafb793cf1"
+    },
+    "data/full/ingestion_watermark.csv": {
+      "bytes": 104,
+      "sha256": "84913a594e1dab324340b767e0098c850da752919f62abee866599b672154269"
+    },
+    "data/full/manifest.json": {
+      "bytes": 2663,
+      "sha256": "978ccf38d54cd0f3625f35e6e063b9ac44bee9b0de4fd4870c63c04376170591"
+    },
+    "data/full/outlet.csv": {
+      "bytes": 16099,
+      "sha256": "c433858c09b1c808bcf46733984783cfccd66e38e4cdc5a13f7cc9a54c78bd6a"
+    },
+    "data/full/outlet_day.csv": {
+      "bytes": 5902911,
+      "sha256": "57734751bc0fe197673810473fe9c2052be352d185766376a614fda2cc8bf516"
+    },
+    "data/full/product.csv": {
+      "bytes": 465,
+      "sha256": "eddb2197df05ea0568a7f16427960c6cf36fcb33c9fbb019da0ef1c3e019b3cf"
+    },
+    "data/full/province.csv": {
+      "bytes": 69,
+      "sha256": "bb5322dff935fc886eb1c9cf5b623ea6849c7bd0614aa48d45bafc3dfa2c47c4"
+    },
+    "data/full/regency.csv": {
+      "bytes": 157,
+      "sha256": "21ef5ab78d810218747549d327f6098be5868c47d36f8312efcdf9f04d7a56f1"
+    },
+    "data/full/sales.csv": {
+      "bytes": 379,
+      "sha256": "615bcd0c91d7de1d55553a75595ed675c422c012b74bd659c9edcb22b46476db"
+    },
+    "data/full/sales_target.csv": {
+      "bytes": 1313055,
+      "sha256": "4ceedb177f829ab9640cbba4eebdd90d39fedd6f7009ab55276dc3bf8b7f8463"
+    },
+    "data/full/scenario_truth.json": {
+      "bytes": 528,
+      "sha256": "c0c6cb023d44eb1a26b088957351cd115d62bd86a70e132f96dc52b69a9800c9"
+    },
+    "data/full/sell_in.csv": {
+      "bytes": 6648775,
+      "sha256": "3fb59782eb481f5f380424c624dc8f6e716227e0491a790527ef0edd25e74bfd"
+    },
+    "data/full/sell_out.csv": {
+      "bytes": 35806760,
+      "sha256": "7deae5afea1e5c167afe35ca7954c5201ca88f6597e21f5db9de91524ad1b4a9"
+    },
+    "data/full/stock_account.csv": {
+      "bytes": 1180,
+      "sha256": "48769f1ee935670daa75787db1152535470acd7242eb17c2be85fb4aee77d7d5"
+    },
+    "data/full/supply.csv": {
+      "bytes": 8614756,
+      "sha256": "56873497463fce3ddbdceaa59db81ec5786a5a2dca624b5ef07589a4c715b92e"
+    },
+    "docs/CLAUDE_CODE_PROMPT.md": {
+      "bytes": 15064,
+      "sha256": "9f87b27820e16e28887e343c7df4cbfc3da53ae7ce18cd13c2218b0ccbbb1e05"
+    },
+    "docs/CLOUD.md": {
+      "bytes": 6767,
+      "sha256": "0abb770106901d10c7762ebe2ecde1516e7e20a44173185ab16a0284bcd213c0"
+    },
+    "docs/ERD.md": {
+      "bytes": 4227,
+      "sha256": "966b71f31af40c4133626494fba84e9eeea7813755a2e8b975f20ef18cf18dbf"
+    },
+    "docs/KPI_AND_ANALYSIS.md": {
+      "bytes": 5855,
+      "sha256": "a671f186c52dddac5867e04ed5d526b18a30e32521e13d6f4a9bf23a98f0080e"
+    },
+    "docs/TOOL_CONTRACTS.md": {
+      "bytes": 6636,
+      "sha256": "87da06537444649a5844a620091b3fddc4632121074409f691b66e7de84a1fe3"
+    },
+    "docs/VERIFICATION.md": {
+      "bytes": 3740,
+      "sha256": "e2c6c1157d708f80c834f28a34de8362f5c8d0ba27c66b5e072ac7ce587802e7"
+    },
+    "examples/__init__.py": {
+      "bytes": 60,
+      "sha256": "c187b265070ee6403f44c6923437a16138a83ae7d9e5548e7cb157a005ce8831"
+    },
+    "examples/answer_demo.md": {
+      "bytes": 1874,
+      "sha256": "1571f1b8f17213a5271507999cba2f58fce70768196ef73c1fb4a9e7d6eb0079"
+    },
+    "examples/context_demo.py": {
+      "bytes": 1379,
+      "sha256": "697fea8e7840210d8e3db4410540307a754620d56bc4809f7ebe61676b7c9d6e"
+    },
+    "examples/csv_verification.json": {
+      "bytes": 1800,
+      "sha256": "439d836ffd14fb99026f226e8c4718a21352bf4063f2c28f74f6704fde07621f"
+    },
+    "examples/determinism_verification.json": {
+      "bytes": 201,
+      "sha256": "26050e1eb70777e5558118baacdcd67357a1e2fc92bd1faed760398ebe6ae911"
+    },
+    "examples/district_evidence.json": {
+      "bytes": 4421,
+      "sha256": "2e2e015476bb350131b7f8ef886e1092477a7e8f8749f1232e8bb0b00dec507c"
+    },
+    "examples/district_ranking.json": {
+      "bytes": 2616,
+      "sha256": "e3c666b45a9535741a41239da55bff33a00325e0bfcc3c06aabbb4bd0dc17077"
+    },
+    "examples/district_recommendation.json": {
+      "bytes": 1491,
+      "sha256": "97f833ba388d4720f7cff29e60e73a25d89cef8d548ab0e47401c90f6486974b"
+    },
+    "examples/final_sql_smoke.json": {
+      "bytes": 1046,
+      "sha256": "87566b214751c59e3f1778ce20594b9c8ec5d779400eafa2e8d392d37976e727"
+    },
+    "examples/outlet_evidence.json": {
+      "bytes": 2905,
+      "sha256": "db2ec90ac06514692b4c0c65651580529308644488c1810b29af597b8c54468b"
+    },
+    "examples/outlet_recommendation.json": {
+      "bytes": 1491,
+      "sha256": "25b441412fb0b868a204634da89f50261a9ae039571cd1fde06d78c508624ea7"
+    },
+    "examples/postgres_verification.json": {
+      "bytes": 1121,
+      "sha256": "1d32695cc082be7d8d78e6d0ebbe39e96d280a6b514eb71390fdf47962083bbc"
+    },
+    "examples/python_tests.txt": {
+      "bytes": 1261,
+      "sha256": "ecc2c32cb7866a232e02919b78382b9383cd332f685d9fe7fc7ad187cb7bbb30"
+    },
+    "package-lock.json": {
+      "bytes": 633,
+      "sha256": "50e19d126a865255ca5e9ad49b729b69c18bb24b422759296e1e5875b9ecaa00"
+    },
+    "package.json": {
+      "bytes": 278,
+      "sha256": "1758cb6f915b2ef0abd7afa98194a34decaef994db22d89c356658ba36c218e8"
+    },
+    "README.md": {
+      "bytes": 7583,
+      "sha256": "ca1976ea0cd6ecca262e0e91b454d98d0807cc038d03646314a399bef065ff46"
+    },
+    "requirements.txt": {
+      "bytes": 24,
+      "sha256": "dcda3b74b9cdc6c74b1f426e87596e0948ebb3a5d988cd375ecd4bf2ec1a0a11"
+    },
+    "sql/001_core.sql": {
+      "bytes": 12263,
+      "sha256": "c52871d5e8814c2ac81e1557507a0b54b2bde8082c03a960423c73e033eb70e8"
+    },
+    "sql/002_analytics.sql": {
+      "bytes": 7511,
+      "sha256": "ba13a441111dd479cd8e377c924caac1039d9dc98d4f16825d4cbd98d7457ba8"
+    },
+    "sql/003_reporting.sql": {
+      "bytes": 1643,
+      "sha256": "f10cb9b97683e708f3c04c08044cd333d305a83b2dc3088308e82c4cbac8f46b"
+    },
+    "sql/004_access.sql": {
+      "bytes": 1334,
+      "sha256": "dec8667d3c02441b773a20af77fb75834b7f4fd54d0a7d3672ef511700d051c7"
+    },
+    "sql/security.sql": {
+      "bytes": 2038,
+      "sha256": "f05aa3831ab33d7784cd219189525798b2c192212ae23fe04c33b4a829acd9ef"
+    },
+    "sql/validate.sql": {
+      "bytes": 3609,
+      "sha256": "c1456451f44f58606da9d89d8b02c23b1630b1f31f5e2f3495650793ff2ca140"
+    },
+    "telco/__init__.py": {
+      "bytes": 78,
+      "sha256": "fdb8c0471bb56ca99c99d8d1614d0b159d6b95044d2f6488c63c2c1803be3091"
+    },
+    "telco/db.py": {
+      "bytes": 3231,
+      "sha256": "401869f481671e1beb99a29322af6596525fba94ff6d15bf27f64afa62f2fffb"
+    },
+    "telco/generate.py": {
+      "bytes": 8636,
+      "sha256": "273649b5054dd786a3a8487b7378dbd9ba9e8685fd80b3631c06e7838152c414"
+    },
+    "telco/tools.py": {
+      "bytes": 8184,
+      "sha256": "1077e403e5cedf8f6c5ff98dc391936a4c957121ca45b39fa92c84333ccecd8b"
+    },
+    "telco/validate_csv.py": {
+      "bytes": 5242,
+      "sha256": "a4df03ae7cfa91c9dd05330d71cc2348ed9a5a6a107772b7cf560f4dfeb26720"
+    },
+    "tests/pglite_smoke.mjs": {
+      "bytes": 4711,
+      "sha256": "ba8995c9d2aad89a86b2ce2043b9e67c1aa8bf81c6d39f69c510caf402add848"
+    },
+    "tests/pglite_verify.mjs": {
+      "bytes": 8146,
+      "sha256": "ba3b60371d015270e2082b7b03cf2632b4e7719824ea0230b3888326b69ea86a"
+    },
+    "tests/test_core.py": {
+      "bytes": 3334,
+      "sha256": "b76e89cae5d50d4884eb622ffa9ca8361e4cc3c5d5af1f2c76c776132c304c87"
+    },
+    "tests/test_postgres.py": {
+      "bytes": 4543,
+      "sha256": "cbe89ec0375d671658aa3b2541b40f434d77292ed665f9f9c0180e4325e976ab"
+    }
+  }
+}

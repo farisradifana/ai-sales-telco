@@ -1,0 +1,122 @@
+{
+  "scope": "outlet",
+  "channel": "sell_out",
+  "current": [
+    "2026-09-01",
+    "2026-10-01"
+  ],
+  "drivers": [
+    {
+      "q0": 85,
+      "q1": 0,
+      "r0": 1870000,
+      "r1": 0,
+      "product": "Voucher Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -1870000,
+      "product_id": 4,
+      "stock_unit": "PCS",
+      "volume_effect_idr": 0,
+      "price_mix_effect_idr": 0,
+      "entry_exit_effect_idr": -1870000
+    },
+    {
+      "q0": 153,
+      "q1": 7,
+      "r0": 1836000,
+      "r1": 75600,
+      "product": "Voucher Fiktif Nova 3GB 7 Hari",
+      "delta_idr": -1760400,
+      "product_id": 3,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -1664400,
+      "price_mix_effect_idr": -96000,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 56,
+      "q1": 29,
+      "r0": 1400000,
+      "r1": 652500,
+      "product": "Perdana Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -747500,
+      "product_id": 1,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -641250,
+      "price_mix_effect_idr": -106250,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 23,
+      "q1": 10,
+      "r0": 1035000,
+      "r1": 405000,
+      "product": "Voucher Fiktif Nova 20GB 30 Hari",
+      "delta_idr": -630000,
+      "product_id": 5,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -555750,
+      "price_mix_effect_idr": -74250,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 20,
+      "q1": 19,
+      "r0": 1000000,
+      "r1": 855000,
+      "product": "Perdana Fiktif Nova 18GB 30 Hari",
+      "delta_idr": -145000,
+      "product_id": 2,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -47500,
+      "price_mix_effect_idr": -97500,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 190000,
+      "q1": 170000,
+      "r0": 191900,
+      "r1": 171700,
+      "product": "Saldo Fiktif Nova Rupiah",
+      "delta_idr": -20200,
+      "product_id": 6,
+      "stock_unit": "IDR",
+      "volume_effect_idr": -20200,
+      "price_mix_effect_idr": 0,
+      "entry_exit_effect_idr": 0
+    }
+  ],
+  "baseline": [
+    "2026-06-01",
+    "2026-07-01"
+  ],
+  "coverage": {
+    "visits_done": 0,
+    "visits_planned": 8,
+    "complete_outlet_days": 30,
+    "expected_outlet_days": 30,
+    "observed_outlet_days": 30,
+    "stockout_observed_days": 0,
+    "observed_stockout_minutes": null
+  },
+  "timezone": "Asia/Jakarta",
+  "certainty": "Accounting decomposition verified; causal drivers unproven",
+  "delta_idr": -5173100,
+  "entity_id": 1,
+  "watermark": "2026-09-30",
+  "query_version": "diagnose-v1",
+  "baseline_coverage": {
+    "complete_outlet_days": 30,
+    "expected_outlet_days": 30
+  },
+  "revenue_current_idr": 2159800,
+  "outlet_contributions": [
+    {
+      "name": "Outlet Fiktif 0001",
+      "delta_idr": -5173100,
+      "outlet_id": 1,
+      "current_idr": 2159800,
+      "baseline_idr": 7332900
+    }
+  ],
+  "revenue_baseline_idr": 7332900
+}

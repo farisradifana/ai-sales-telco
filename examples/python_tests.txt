@@ -1,0 +1,14 @@
+test_bad_count_and_existing_data (test_core.GeneratorTests.test_bad_count_and_existing_data) ... ok
+test_corruption_detected (test_core.GeneratorTests.test_corruption_detected) ... ok
+test_fk_error_detected_even_with_new_checksum (test_core.GeneratorTests.test_fk_error_detected_even_with_new_checksum) ... ok
+test_repeatability_and_seed_sensitivity (test_core.GeneratorTests.test_repeatability_and_seed_sensitivity) ... ok
+test_decline_actions_link_evidence (test_core.RecommendationTests.test_decline_actions_link_evidence) ... ok
+test_missing_and_stale_data_gate (test_core.RecommendationTests.test_missing_and_stale_data_gate) ... ok
+test_zero_baseline_no_forced_decline (test_core.RecommendationTests.test_zero_baseline_no_forced_decline) ... ok
+test_concurrent_oversell_exactly_one_succeeds (test_postgres.PostgreSQLTests.test_concurrent_oversell_exactly_one_succeeds) ... skipped 'DATABASE_URL absent; real PostgreSQL server tests skipped'
+test_followup_isolation_version_and_expiry (test_postgres.PostgreSQLTests.test_followup_isolation_version_and_expiry) ... skipped 'DATABASE_URL absent; real PostgreSQL server tests skipped'
+
+----------------------------------------------------------------------
+Ran 7 tests in 5.195s
+
+OK (skipped=2)

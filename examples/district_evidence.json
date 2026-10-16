@@ -1,0 +1,185 @@
+{
+  "scope": "district",
+  "channel": "sell_out",
+  "current": [
+    "2026-09-01",
+    "2026-10-01"
+  ],
+  "drivers": [
+    {
+      "q0": 468,
+      "q1": 97,
+      "r0": 21060000,
+      "r1": 3928500,
+      "product": "Voucher Fiktif Nova 20GB 30 Hari",
+      "delta_idr": -17131500,
+      "product_id": 5,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -15860250,
+      "price_mix_effect_idr": -1271250,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 377,
+      "q1": 78,
+      "r0": 18850000,
+      "r1": 3510000,
+      "product": "Perdana Fiktif Nova 18GB 30 Hari",
+      "delta_idr": -15340000,
+      "product_id": 2,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -14202500,
+      "price_mix_effect_idr": -1137500,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 902,
+      "q1": 243,
+      "r0": 19844000,
+      "r1": 4811400,
+      "product": "Voucher Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -15032600,
+      "product_id": 4,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -13773100,
+      "price_mix_effect_idr": -1259500,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 591,
+      "q1": 124,
+      "r0": 14775000,
+      "r1": 2790000,
+      "product": "Perdana Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -11985000,
+      "product_id": 1,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -11091250,
+      "price_mix_effect_idr": -893750,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 1099,
+      "q1": 150,
+      "r0": 13188000,
+      "r1": 1620000,
+      "product": "Voucher Fiktif Nova 3GB 7 Hari",
+      "delta_idr": -11568000,
+      "product_id": 3,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -10818600,
+      "price_mix_effect_idr": -749400,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 4400000,
+      "q1": 500000,
+      "r0": 4444000,
+      "r1": 505000,
+      "product": "Saldo Fiktif Nova Rupiah",
+      "delta_idr": -3939000,
+      "product_id": 6,
+      "stock_unit": "IDR",
+      "volume_effect_idr": -3939000,
+      "price_mix_effect_idr": 0,
+      "entry_exit_effect_idr": 0
+    }
+  ],
+  "baseline": [
+    "2026-06-01",
+    "2026-07-01"
+  ],
+  "coverage": {
+    "visits_done": 0,
+    "visits_planned": 80,
+    "complete_outlet_days": 300,
+    "expected_outlet_days": 300,
+    "observed_outlet_days": 300,
+    "stockout_observed_days": 0,
+    "observed_stockout_minutes": null
+  },
+  "timezone": "Asia/Jakarta",
+  "certainty": "Accounting decomposition verified; causal drivers unproven",
+  "delta_idr": -74996100,
+  "entity_id": 1,
+  "watermark": "2026-09-30",
+  "query_version": "diagnose-v1",
+  "baseline_coverage": {
+    "complete_outlet_days": 300,
+    "expected_outlet_days": 300
+  },
+  "revenue_current_idr": 17164900,
+  "outlet_contributions": [
+    {
+      "name": "Outlet Fiktif 0009",
+      "delta_idr": -10593700,
+      "outlet_id": 9,
+      "current_idr": 255600,
+      "baseline_idr": 10849300
+    },
+    {
+      "name": "Outlet Fiktif 0005",
+      "delta_idr": -10386700,
+      "outlet_id": 5,
+      "current_idr": 972900,
+      "baseline_idr": 11359600
+    },
+    {
+      "name": "Outlet Fiktif 0007",
+      "delta_idr": -9202800,
+      "outlet_id": 7,
+      "current_idr": 1331100,
+      "baseline_idr": 10533900
+    },
+    {
+      "name": "Outlet Fiktif 0010",
+      "delta_idr": -8853900,
+      "outlet_id": 10,
+      "current_idr": 1080900,
+      "baseline_idr": 9934800
+    },
+    {
+      "name": "Outlet Fiktif 0003",
+      "delta_idr": -8373200,
+      "outlet_id": 3,
+      "current_idr": 1398100,
+      "baseline_idr": 9771300
+    },
+    {
+      "name": "Outlet Fiktif 0006",
+      "delta_idr": -7527200,
+      "outlet_id": 6,
+      "current_idr": 2441700,
+      "baseline_idr": 9968900
+    },
+    {
+      "name": "Outlet Fiktif 0002",
+      "delta_idr": -5316700,
+      "outlet_id": 2,
+      "current_idr": 2201400,
+      "baseline_idr": 7518100
+    },
+    {
+      "name": "Outlet Fiktif 0001",
+      "delta_idr": -5173100,
+      "outlet_id": 1,
+      "current_idr": 2159800,
+      "baseline_idr": 7332900
+    },
+    {
+      "name": "Outlet Fiktif 0008",
+      "delta_idr": -5126000,
+      "outlet_id": 8,
+      "current_idr": 2314700,
+      "baseline_idr": 7440700
+    },
+    {
+      "name": "Outlet Fiktif 0004",
+      "delta_idr": -4442800,
+      "outlet_id": 4,
+      "current_idr": 3008700,
+      "baseline_idr": 7451500
+    }
+  ],
+  "revenue_baseline_idr": 92161000
+}

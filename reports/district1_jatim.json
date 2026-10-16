@@ -1,0 +1,161 @@
+{
+  "scope": "district",
+  "channel": "sell_out",
+  "current": [
+    "2026-09-01",
+    "2026-10-01"
+  ],
+  "drivers": [
+    {
+      "q0": 85.0,
+      "q1": 0,
+      "r0": 1870000.0,
+      "r1": 0,
+      "product": "Voucher Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -1870000.0,
+      "product_id": 4,
+      "stock_unit": "PCS",
+      "volume_effect_idr": 0,
+      "price_mix_effect_idr": 0,
+      "entry_exit_effect_idr": -1870000.0
+    },
+    {
+      "q0": 153.0,
+      "q1": 7.0,
+      "r0": 1836000.0,
+      "r1": 75600.0,
+      "product": "Voucher Fiktif Nova 3GB 7 Hari",
+      "delta_idr": -1760400.0,
+      "product_id": 3,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -1664400.0,
+      "price_mix_effect_idr": -96000.0,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 56.0,
+      "q1": 29.0,
+      "r0": 1400000.0,
+      "r1": 652500.0,
+      "product": "Perdana Fiktif Nova 8GB 30 Hari",
+      "delta_idr": -747500.0,
+      "product_id": 1,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -641250.0,
+      "price_mix_effect_idr": -106250.0,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 23.0,
+      "q1": 10.0,
+      "r0": 1035000.0,
+      "r1": 405000.0,
+      "product": "Voucher Fiktif Nova 20GB 30 Hari",
+      "delta_idr": -630000.0,
+      "product_id": 5,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -555750.0,
+      "price_mix_effect_idr": -74250.0,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 20.0,
+      "q1": 19.0,
+      "r0": 1000000.0,
+      "r1": 855000.0,
+      "product": "Perdana Fiktif Nova 18GB 30 Hari",
+      "delta_idr": -145000.0,
+      "product_id": 2,
+      "stock_unit": "PCS",
+      "volume_effect_idr": -47500.0,
+      "price_mix_effect_idr": -97500.0,
+      "entry_exit_effect_idr": 0
+    },
+    {
+      "q0": 190000.0,
+      "q1": 170000.0,
+      "r0": 191900.0,
+      "r1": 171700.0,
+      "product": "Saldo Fiktif Nova Rupiah",
+      "delta_idr": -20200.0,
+      "product_id": 6,
+      "stock_unit": "IDR",
+      "volume_effect_idr": -20200.0,
+      "price_mix_effect_idr": 0.0,
+      "entry_exit_effect_idr": 0
+    }
+  ],
+  "baseline": [
+    "2026-06-01",
+    "2026-07-01"
+  ],
+  "coverage": {
+    "visits_done": 0,
+    "visits_planned": 8,
+    "complete_outlet_days": 30,
+    "expected_outlet_days": 30,
+    "observed_outlet_days": 30,
+    "stockout_observed_days": 0,
+    "observed_stockout_minutes": null
+  },
+  "timezone": "Asia/Jakarta",
+  "certainty": "Accounting decomposition verified; causal drivers unproven",
+  "delta_idr": -5173100.0,
+  "entity_id": 1,
+  "watermark": "2026-09-30",
+  "query_version": "diagnose-v1",
+  "source_batch_key": "SYN-42-sell_out",
+  "baseline_coverage": {
+    "complete_outlet_days": 30,
+    "expected_outlet_days": 30
+  },
+  "revenue_current_idr": 2159800.0,
+  "outlet_contributions": [
+    {
+      "name": "Outlet Fiktif 0001",
+      "delta_idr": -5173100.0,
+      "outlet_id": 1,
+      "current_idr": 2159800.0,
+      "baseline_idr": 7332900.0
+    }
+  ],
+  "revenue_baseline_idr": 7332900.0,
+  "reconciliation_residual_idr": "0.0",
+  "recommendation": {
+    "data_ready": true,
+    "actions": [
+      {
+        "priority": 1,
+        "action": "Jadwalkan kunjungan verifikasi outlet dan tanyakan kendala; uji pemulihan kunjungan pada outlet pembanding.",
+        "evidence": [
+          "delta_idr",
+          "coverage.visits_done",
+          "coverage.visits_planned"
+        ],
+        "owner": "Sales Supervisor",
+        "review_in_days": 7,
+        "success_metric": "Visit completion >= 80%; compare sell-out/day vs matched controls",
+        "confidence": "hypothesis; visits and sales co-occur, causality unproven"
+      },
+      {
+        "priority": 2,
+        "action": "Audit volume dan harga efektif SKU dengan kontribusi negatif terbesar; cek ketersediaan fisik dan permintaan sebelum mengubah stok/harga.",
+        "product_id": 4,
+        "evidence": [
+          "drivers[0]"
+        ],
+        "owner": "Sales + Trade Marketing",
+        "review_in_days": 7,
+        "success_metric": "SKU net revenue/day and effective price; guardrail discount cost",
+        "confidence": "accounting contribution verified; underlying demand unknown"
+      }
+    ],
+    "limitations": [
+      "Decomposition is not causal attribution.",
+      "Stockout is unknown when observed_stockout_minutes is null; zero closing balance is not proof of lost demand.",
+      "Price effect includes discounts and within-SKU mix; taxes, COGS and competitor data absent.",
+      "No uplift forecast or confidence interval without an experiment/model; actions need human review."
+    ]
+  },
+  "evidence_digest": "7e0ac0cee94f684fbb3607707eb1b16addea02528018af069ece273e59febdd0"
+}

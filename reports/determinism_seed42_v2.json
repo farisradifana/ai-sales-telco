@@ -1,0 +1,27 @@
+{
+  "v2_runs_identical": true,
+  "counts": {
+    "province": 1,
+    "regency": 38,
+    "district": 666,
+    "sales": 12,
+    "stock_account": 132,
+    "outlet": 120,
+    "assignment": 120,
+    "product": 6,
+    "sales_target": 15312,
+    "outlet_day": 76560,
+    "supply": 100000,
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ingestion_watermark": 2
+  },
+  "files_identical_to_v1": {
+    "sell_in.csv": true,
+    "sell_out.csv": true,
+    "supply.csv": true,
+    "sales_target.csv": true,
+    "outlet_day.csv": true,
+    "assignment.csv": true
+  }
+}

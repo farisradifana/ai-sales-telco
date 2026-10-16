@@ -1,0 +1,96 @@
+{
+  "id": "telco08import00001",
+  "name": "TELCO 08 Spreadsheet import -> staging",
+  "active": false,
+  "nodes": [
+    {
+      "id": "upload",
+      "name": "Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "telco-import",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoAdminJwt",
+          "name": "TELCO admin principal JWT"
+        }
+      },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telco-import",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {
+          "binaryPropertyName": "file"
+        }
+      }
+    },
+    {
+      "id": "stage-import",
+      "name": "Stage import",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoAdminJwt",
+          "name": "TELCO admin principal JWT"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/v1/imports",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Upload": {
+      "main": [
+        [
+          {
+            "node": "Stage import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "telcoGeneratedBy": "n8n/build_workflows.py"
+  }
+}

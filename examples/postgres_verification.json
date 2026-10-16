@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "engine": "PGlite 0.3.14 (PostgreSQL WASM); not a multi-connection server",
+  "counts": {
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ledger": 700000
+  },
+  "checks": [
+    "SQL validate.sql passed on full dataset",
+    "negative stock rejected with atomic rollback",
+    "immutable sales rejected",
+    "overlapping assignment rejected",
+    "duplicate commercial event rejected",
+    "fractional PCS rejected",
+    "missing reversal source rejected",
+    "unequal comparison rejected",
+    "unknown outlet rejected",
+    "reversal stock and net KPI reconcile; reversed in rollback",
+    "outlet and district decomposition reconcile to <0.01 IDR",
+    "outlet contributions reconcile at district and outlet grain",
+    "coverage separated per channel; principal scope default-deny verified",
+    "reader cannot mutate balances",
+    "writer cannot grant itself scope",
+    "restricted writer can post reversal via SECURITY DEFINER trigger only"
+  ],
+  "elapsed_seconds": 488,
+  "limitations": [
+    "Cloud connection/TLS and two-session concurrency not exercised by this engine."
+  ]
+}
