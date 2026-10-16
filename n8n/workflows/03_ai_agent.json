@@ -1,0 +1,687 @@
+{
+  "id": "telco03aiagent0001",
+  "name": "TELCO 03 AI Agent (bahasa natural, kuota per jabatan)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "event",
+      "name": "Event",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "agent-start",
+      "name": "Agent start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent/start",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "useai",
+      "name": "Kuota ada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.next }}",
+              "rightValue": "agent",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "aiagent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        660,
+        -100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Agent start').item.json.question }}",
+        "options": {
+          "systemMessage": "={{ $('Agent start').item.json.system_prompt }}",
+          "maxIterations": 8
+        }
+      }
+    },
+    {
+      "id": "agent-finish",
+      "name": "Agent finish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent/finish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id, text: $json.output || null, failed: !$json.output }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "reply",
+      "name": "Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "complete",
+      "name": "Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/events/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "model",
+      "name": "Model combo (9Router)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        440,
+        220
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "telcoRouterOpenAi",
+          "name": "9Router (OpenAI-compatible)"
+        }
+      },
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "ai-sales"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0.2,
+          "maxRetries": 1,
+          "timeout": 90000
+        }
+      }
+    },
+    {
+      "id": "memory",
+      "name": "Memory (Postgres)",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        600,
+        220
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "telcoAgentMemory",
+          "name": "TELCO agent memory (Postgres)"
+        }
+      },
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Agent start').item.json.session_key }}",
+        "tableName": "agent_memory.chat_history",
+        "contextWindowLength": 6
+      }
+    },
+    {
+      "id": "tool-resolve_entity",
+      "name": "Tool resolve_entity",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Cari outlet/kecamatan/kabupaten-kota/provinsi di wilayah akses pengguna; hasilkan entity_id + scope. Panggil ini dulu bila pengguna menyebut nama wilayah/outlet.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/resolve_entity",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $fromAI('query', 'Nama atau kode, mis. Kebonsari, Kabupaten Madiun, OUT-0003', 'string'), scope: $fromAI('scope', 'Opsional: outlet, district, regency, atau province', 'string', '') || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "tool-diagnose",
+      "name": "Tool diagnose",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Analisis perubahan omzet satu outlet/kecamatan/kab-kota/provinsi: total, kontribusi SKU, volume vs harga/mix, kunjungan, saran. Butuh scope + entity_id dari resolve_entity.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/diagnose",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ scope: $fromAI('scope', 'outlet, district, regency, atau province', 'string'), entity_id: $fromAI('entity_id', 'entity_id dari resolve_entity', 'number'), channel: $fromAI('channel', 'sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet)', 'string', 'sell_out'), baseline_start: $fromAI('baseline_start', 'Opsional. Awal periode pembanding YYYY-MM-DD', 'string', '') || null, baseline_end: $fromAI('baseline_end', 'Opsional. Akhir periode pembanding (eksklusif)', 'string', '') || null, current_start: $fromAI('current_start', 'Opsional. Awal periode yang dianalisis YYYY-MM-DD', 'string', '') || null, current_end: $fromAI('current_end', 'Opsional. Akhir periode dianalisis (eksklusif)', 'string', '') || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "tool-rank_districts",
+      "name": "Tool rank_districts",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Peringkat kecamatan di wilayah akses pengguna berdasarkan perubahan omzet.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/rank_districts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $fromAI('channel', 'sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet)', 'string', 'sell_out'), baseline_start: $fromAI('baseline_start', 'Opsional. Awal periode pembanding YYYY-MM-DD', 'string', '') || null, baseline_end: $fromAI('baseline_end', 'Opsional. Akhir periode pembanding (eksklusif)', 'string', '') || null, current_start: $fromAI('current_start', 'Opsional. Awal periode yang dianalisis YYYY-MM-DD', 'string', '') || null, current_end: $fromAI('current_end', 'Opsional. Akhir periode dianalisis (eksklusif)', 'string', '') || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "tool-rank_regencies",
+      "name": "Tool rank_regencies",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Peringkat kabupaten/kota (yang seluruh kecamatannya dalam akses pengguna) berdasarkan perubahan omzet.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/rank_regencies",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $fromAI('channel', 'sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet)', 'string', 'sell_out'), baseline_start: $fromAI('baseline_start', 'Opsional. Awal periode pembanding YYYY-MM-DD', 'string', '') || null, baseline_end: $fromAI('baseline_end', 'Opsional. Akhir periode pembanding (eksklusif)', 'string', '') || null, current_start: $fromAI('current_start', 'Opsional. Awal periode yang dianalisis YYYY-MM-DD', 'string', '') || null, current_end: $fromAI('current_end', 'Opsional. Akhir periode dianalisis (eksklusif)', 'string', '') || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "tool-stock",
+      "name": "Tool stock",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Stok yang dipegang pengguna (account self) atau stok satu outlet (account outlet + outlet_id dari resolve_entity). PCS dan saldo IDR tidak dijumlahkan.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/stock",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ account: $fromAI('account', 'self (stok saya) atau outlet', 'string', 'self'), outlet_id: $fromAI('outlet_id', 'Wajib bila account outlet: entity_id outlet dari resolve_entity', 'number', 0) || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "tool-target",
+      "name": "Tool target",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Realisasi vs target harian sales (milik pengguna) pada satu channel.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/target",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $fromAI('channel', 'sell_in atau sell_out', 'string', 'sell_in'), target_date: $fromAI('target_date', 'Opsional YYYY-MM-DD; kosong = hari ini', 'string', '') || null }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Event": {
+      "main": [
+        [
+          {
+            "node": "Agent start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent start": {
+      "main": [
+        [
+          {
+            "node": "Kuota ada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kuota ada?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Agent finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent finish": {
+      "main": [
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply": {
+      "main": [
+        [
+          {
+            "node": "Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model combo (9Router)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory (Postgres)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool resolve_entity": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool diagnose": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool rank_districts": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool rank_regencies": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool stock": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool target": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "telcoGeneratedBy": "n8n/build_workflows.py"
+  }
+}

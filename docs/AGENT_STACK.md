@@ -44,3 +44,15 @@ Tidak ada tool SQL, shell, filesystem, web, atau transaksi tulis.
 Instalasi 9Router lokal milik pengguna dikonfigurasi dengan model berprefix akun langganan. Konfigurasi itu **tidak dipakai**
 oleh proyek; semua tes memakai mock provider (`tests/mock_servers.py llm`). Uji live membutuhkan API key provider berizin
 yang diberikan pemilik akun.
+
+## Jalur utama WhatsApp: AI Agent n8n (sejak migrasi 010)
+
+Pesan bahasa natural di WhatsApp kini dijawab oleh node **AI Agent n8n** (workflow 03), bukan lewat `/events/narrate` →
+Hermes. Model tetap lewat 9Router (combo `ai-sales`, credential `telcoRouterOpenAi`, Responses API off). Batas keamanan sama:
+tiket satu-giliran untuk tool (dikirim n8n lewat header, tidak terlihat oleh model), tool read-only ber-otorisasi, verifikasi
+angka di `telco_api/chat_agent.py::ChatAgent.finish`, ID teknis dihapus. Memory = Postgres Chat Memory di schema
+`agent_memory` (login khusus, tanpa akses schema `telco`). Kuota chat harian per jabatan: lihat `n8n/README.md`.
+Jalur Hermes (`/internal/v1/events/narrate`, MCP bridge) tetap tersedia untuk fallback Python dan tes, tetapi tidak dipakai router n8n.
+Uji nyata (2026-10-17, n8n 2.35.7 + combo `ai-sales`): pertanyaan HoB Madiun "kecamatan mana yang paling turun bulan lalu?"
+→ resolve + rank_districts → jawaban `verified=True`; pertanyaan lanjutan "kenapa yang paling turun tadi?" dipahami dari memory
+→ diagnose → jawaban terverifikasi + tautan grafik. Waktu respons 20–104 detik (bergantung model combo).

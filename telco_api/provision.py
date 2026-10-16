@@ -21,6 +21,7 @@ LOGIN_ROLES = {  # login role -> (group roles, password env var)
     'telco_api_writer': (['telco_writer'], 'TELCO_API_WRITER_PASSWORD'),
     'telco_api_identity': (['telco_identity_rw'], 'TELCO_API_IDENTITY_PASSWORD'),
     'telco_ops_login': (['telco_ops'], 'TELCO_OPS_PASSWORD'),
+    'telco_agent_memory_login': (['telco_agent_memory'], 'TELCO_AGENT_MEMORY_PASSWORD'),  # n8n Postgres Chat Memory
 }
 DEMO_WA_PREFIX = '0099'
 

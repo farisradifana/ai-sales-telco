@@ -19,6 +19,8 @@ untuk audit keamanan.
 | Nomor WhatsApp pengguna terdaftar | Mengenali pengguna dan mengirim balasan | Disimpan **terenkripsi** (AES-256-GCM) dengan indeks HMAC terpisah; tidak ditampilkan di log |
 | Isi pesan yang Anda kirim ke Layanan | Menjalankan perintah (input penjualan, stok, target, insight) | Disimpan dalam bentuk ternormalisasi tanpa nomor telepon |
 | Data penjualan, stok, target | Fungsi inti Layanan | Data uji coba bersifat fiktif/sintetis |
+| Riwayat chat dengan asisten AI (6 pesan terakhir) | Agar asisten memahami pertanyaan lanjutan ("yang tadi kenapa?") | Dikaitkan ke ID akun, bukan nomor telepon; dihapus otomatis setelah 7 hari |
+| Pemakaian kuota chat AI | Membatasi jumlah chat AI per hari sesuai jabatan | Hanya ID akun, tanggal, dan ID pesan |
 | Log teknis | Keamanan, audit, pemecahan masalah | Berisi ID korelasi; nomor telepon dan token disamarkan |
 
 Kami **tidak** mengumpulkan kontak, lokasi, media, atau data pelanggan akhir. Kami **tidak** menjual atau membagikan data
@@ -39,7 +41,8 @@ Tindakan yang berdampak (posting penjualan, reversal, transfer) selalu memerluka
 ## 5. Penyimpanan dan keamanan
 
 Akses data dibatasi berdasarkan peran dan wilayah (default ditolak). Kredensial disimpan di luar kode sumber. Data
-percakapan analitik memiliki masa berlaku (TTL) dan log eksekusi otomatis yang berhasil tidak disimpan. Data uji coba
+percakapan analitik memiliki masa berlaku (TTL); riwayat chat AI dihapus setelah 7 hari dan log eksekusi otomatis dihapus
+setelah 24 jam. Data uji coba
 dapat dihapus setelah masa uji coba berakhir.
 
 ## 6. Hak Anda

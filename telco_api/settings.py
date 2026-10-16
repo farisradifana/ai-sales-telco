@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     circuit_failures: int = Field(3, ge=1, le=20)
     circuit_reset_s: float = Field(60, ge=1, le=3600)
     agent_ticket_ttl_s: int = Field(180, ge=10, le=900)
+    agent_memory_retention_days: int = Field(7, ge=1, le=90)  # n8n AI Agent chat memory (agent_memory.chat_history)
 
     # Signed chart URLs.
     chart_signing_key: SecretStr | None = None

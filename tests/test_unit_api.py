@@ -186,3 +186,8 @@ def test_scrub_ids_removes_technical_ids():
     from telco_api.agent import scrub_ids
     out = scrub_ids('Turun -Rp5.173.100.\nEvidence ID 11111111-2222-3333-4444-555555555555.\nSaran: kunjungi outlet.')
     assert '1111' not in out and 'Evidence' not in out and '-Rp5.173.100' in out and 'Saran' in out
+
+
+def test_agent_reply_uses_whatsapp_markup():
+    from telco_api.chat_agent import whatsapp_format
+    assert whatsapp_format('## Ringkasan\n**Omzet:** Rp 1.000\n* poin\n__catatan__') == 'Ringkasan\n*Omzet:* Rp 1.000\n- poin\n_catatan_'

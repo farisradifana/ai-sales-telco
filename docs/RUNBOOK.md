@@ -100,6 +100,11 @@ python scripts/e2e_local.py --report reports/e2e_local.json
 
 ## 8. Operasi admin
 
+- Kuota chat AI per jabatan: `telco.chat_quota_policy` (role ops boleh `UPDATE`); pemakaian hari ini per akun di
+  `telco.chat_quota_usage` (baris `refunded_at` terisi = dikembalikan karena model gagal). Detail: `n8n/README.md`.
+- Setelah migrasi 010: jalankan ulang `sql/security_platform.sql`, lalu `python -m telco_api.provision roles` (membuat login
+  `telco_agent_memory_login` dari `TELCO_AGENT_MEMORY_PASSWORD`), lalu buat credential n8n `telcoRouterOpenAi` + `telcoAgentMemory`.
+
 - Cabut izin: `python -m telco_api.provision revoke --principal <id> --scope district --entity <id> --reason "<alasan>"`
   (berlaku langsung, termasuk follow-up konteks lama dan tautan chart).
 - Penerimaan stok (supply) hanya via job admin dengan bukti sumber; tidak ada endpoint publik/agent.

@@ -17,6 +17,7 @@ from .agent import Narrator
 from .db import Database
 from .money import stringify_money
 from .orchestrator import Pipeline
+from .chat_agent import ChatAgent
 from .schemas import (ActionDecision, ConfirmRequest, ContextCreate, CorrectionRequest, DashboardRequest, DevLogin,
                       DiagnoseRequest, DirectSale, DraftRequest, FollowUp, NotificationPrefIn, NudgeRun, OutboxDispatch,
                       RankRequest, ResolveRequest, ReversalRequest, StockRequest, TargetRequest, TransferRequest)
@@ -34,6 +35,14 @@ class EventRef(BaseModel):
     error: str | None = Field(None, max_length=300)
 
 
+class AgentFinish(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    provider: str = Field(pattern=r'^whatsapp$')
+    message_id: str = Field(min_length=6, max_length=160)
+    text: str | None = Field(None, max_length=20000)
+    failed: bool = False
+
+
 def create_app(settings: Settings | None = None, db: Database | None = None, narrator: Narrator | None = None,
                wa_sender=None, n8n_sender=None) -> FastAPI:
     s = settings or get_settings()
@@ -43,6 +52,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
     limiter = RateLimiter(s.rate_limit_per_minute)
     narr = narrator or Narrator(s, database)
     pipeline = Pipeline(database, s, narr)
+    chat = ChatAgent(database, s, pipeline)
     wa = wa_sender or outbox.WhatsAppSender(s)
     n8n = n8n_sender or outbox.N8nDispatcher(s)
 
@@ -106,6 +116,13 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
 
     def mcp_service(request: Request):
         check_service_token(request, s.mcp_service_token)
+
+    def tool_caller(request: Request):
+        # Business tools are reached by the MCP bridge (Hermes) or by n8n AI Agent HTTP tools; both still need a ticket.
+        try:
+            check_service_token(request, s.mcp_service_token)
+        except errors.AppError:
+            check_service_token(request, s.n8n_service_token)
 
     corr = lambda r: r.state.correlation_id  # noqa: E731
 
@@ -333,13 +350,23 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
         now = body.now if (body.now and s.app_env in ('local', 'test')) else None
         return nudges.run(database, s, corr(request), now=now)
 
-    # ------------------------------------------------------------------ MCP bridge -> business tools (ticket-bound)
+    # ------------------------------------------------------------------ n8n AI Agent turn (quota + verified reply)
+    @app.post('/internal/v1/agent/start')
+    def agent_start(body: EventRef, _=Depends(n8n_service)):
+        return chat.start(body.provider, body.message_id)
+
+    @app.post('/internal/v1/agent/finish')
+    def agent_finish(body: AgentFinish, _=Depends(n8n_service)):
+        r = chat.finish(body.provider, body.message_id, body.text, body.failed)
+        return {k: r.get(k) for k in ('next', 'source', 'verified')}
+
+    # ------------------------------------------------------------------ MCP bridge / n8n tools -> business tools (ticket-bound)
     @app.get('/internal/v1/agent-tools')
     def agent_tool_specs(_=Depends(mcp_service)):
         return {'tools': [{'name': n, 'description': d, 'input_schema': agent_tools.input_schema(n)} for n, (_m, d) in agent_tools.TOOLS.items()]}
 
     @app.post('/internal/v1/agent-tools/{name}')
-    async def agent_tool_call(name: str, request: Request, _=Depends(mcp_service)):
+    async def agent_tool_call(name: str, request: Request, _=Depends(tool_caller)):
         args = await request.json()
         if not isinstance(args, dict):
             raise errors.bad_request('INVALID_INPUT', 'Argumen harus objek JSON.')

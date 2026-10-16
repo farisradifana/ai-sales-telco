@@ -37,6 +37,7 @@ def clone_db():
     import telco.db as tdb
     with psycopg.connect(_with_db(ADMIN, name)) as c:
         tdb.migrate(c)  # migrations newer than the template (e.g. 009_area_scope) go to the clone only, never the template
+        c.execute((tdb.ROOT / 'sql/security_platform.sql').read_text(encoding='utf-8'))  # grants for objects of newer migrations
     env = os.environ
     urls = {
         'name': name,
@@ -45,6 +46,7 @@ def clone_db():
         'writer': _with_db(ADMIN, name, 'telco_api_writer', env['TELCO_API_WRITER_PASSWORD']),
         'identity': _with_db(ADMIN, name, 'telco_api_identity', env['TELCO_API_IDENTITY_PASSWORD']),
         'ops': _with_db(ADMIN, name, 'telco_ops_login', env['TELCO_OPS_PASSWORD']),
+        'memory': _with_db(ADMIN, name, 'telco_agent_memory_login', env.get('TELCO_AGENT_MEMORY_PASSWORD', '')),
     }
     yield urls
     if os.environ.get('TELCO_KEEP_CLONE') != '1':

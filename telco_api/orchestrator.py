@@ -178,7 +178,7 @@ class Pipeline:
             text = act['text']
         # Evidence ids are kept for audit in the outbox payload; they are not part of the user-facing text.
         eids = (self.narrate(provider, message_id).get('evidence_ids') if act.get('next') == 'narrate'
-                else [act['evidence_id']] if act.get('evidence_id') else [])
+                else [act['evidence_id']] if act.get('evidence_id') else act.get('evidence_ids') or [])
         oid = self.db.write(lambda conn: outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text',
                                                         {'text': text, 'preview_url': False, 'evidence_ids': eids},
                                                         f'reply:{provider}:{message_id}', ev['correlation_id']))

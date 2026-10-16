@@ -41,3 +41,21 @@ GRANT SELECT,INSERT,UPDATE ON telco.app_principal,telco.price_policy,telco.busin
 GRANT SELECT,INSERT,DELETE ON telco.principal_grant TO telco_ops;
 GRANT SELECT,INSERT ON telco.grant_audit,telco.supply,telco.sales_target TO telco_ops;
 GRANT telco_identity_rw TO telco_ops;
+
+-- 010: AI chat quota + n8n agent memory. The memory role reaches ONLY schema agent_memory (no telco objects).
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='telco_agent_memory') THEN CREATE ROLE telco_agent_memory NOLOGIN; END IF;
+END $$;
+GRANT SELECT ON telco.chat_quota_policy TO telco_reader;
+GRANT SELECT,INSERT,UPDATE ON telco.chat_quota_usage TO telco_writer;
+GRANT UPDATE ON telco.chat_quota_policy TO telco_ops;
+REVOKE ALL ON SCHEMA agent_memory FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA agent_memory FROM PUBLIC;
+-- USAGE+CREATE: LangChain issues CREATE TABLE IF NOT EXISTS before every read; the table already exists (migration 010).
+GRANT USAGE,CREATE ON SCHEMA agent_memory TO telco_agent_memory;
+GRANT SELECT,INSERT ON agent_memory.chat_history TO telco_agent_memory;
+GRANT USAGE,SELECT ON SEQUENCE agent_memory.chat_history_id_seq TO telco_agent_memory;
+-- API writer prunes memory past retention (and per-session overflow); it never reads conversation content.
+GRANT USAGE ON SCHEMA agent_memory TO telco_writer;
+GRANT DELETE ON agent_memory.chat_history TO telco_writer;
+GRANT SELECT(id,session_id,created_at) ON agent_memory.chat_history TO telco_writer;
