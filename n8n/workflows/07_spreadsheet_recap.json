@@ -167,27 +167,61 @@
       }
     },
     {
+      "id": "clearinfo",
+      "name": "Clear Info tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "executeOnce": true,
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Info"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": false
+      }
+    },
+    {
       "id": "rows",
-      "name": "CSV to rows",
+      "name": "Data rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        880,
         0
       ],
       "parameters": {
         "language": "javaScript",
         "mode": "runOnceForAllItems",
-        "jsCode": "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\nconst text = $('Export CSV').first().json.csv || '';\nconst lines = text.split('\\n').filter(l => l.length);\nconst meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\nconst data = lines.filter(l => !l.startsWith('# '));\nconst header = data.shift().split(',');\nconst rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\nreturn [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];"
+        "jsCode": "// Tab \"Rekap\": data table only (Indonesian column headers, numbers as numbers). Metadata goes to tab \"Info\".\nconst text = $('Export CSV').first().json.csv || '';\nconst lines = text.split('\\n').filter((l) => l.length && !l.startsWith('# '));\nconst header = lines.shift().split(',');\nconst label = {\n  day_wib: 'Tanggal (WIB)', outlet_code: 'Kode Outlet', outlet_name: 'Nama Outlet', sku: 'SKU', stock_unit: 'Satuan',\n  quantity: 'Kuantitas', revenue_idr: 'Omzet (IDR)', net_lines: 'Jumlah Transaksi Bersih',\n};\nconst numeric = new Set(['quantity', 'revenue_idr', 'net_lines']);\nreturn lines\n  .filter((l) => !l.startsWith('TOTAL,'))\n  .map((l) => {\n    const v = l.split(',');\n    const row = {};\n    header.forEach((h, i) => { row[label[h] || h] = numeric.has(h) ? Number(v[i]) : (v[i] ?? ''); });\n    return { json: row };\n  });\n"
       }
     },
     {
       "id": "sheet",
-      "name": "Write Google Sheet",
+      "name": "Write Rekap tab",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        880,
+        1100,
         0
       ],
       "credentials": {
@@ -209,6 +243,60 @@
           "__rl": true,
           "mode": "name",
           "value": "Rekap"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "info",
+      "name": "Info rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Tab \"Info\": the export metadata as a tidy two-column table (Keterangan | Nilai), human-readable WIB dates.\nconst text = $('Export CSV').first().json.csv || '';\nconst meta = {};\nfor (const l of text.split('\\n')) {\n  if (!l.startsWith('# ')) continue;\n  const i = l.indexOf(': ');\n  meta[l.slice(2, i)] = l.slice(i + 2);\n}\nconst tgl = (iso) => {\n  if (!iso) return '';\n  const [y, m, d] = iso.slice(0, 10).split('-');\n  return `${d}-${m}-${y}`;\n};\nconst minusOneDay = (iso) => {\n  const t = new Date(iso + 'T00:00:00Z');\n  t.setUTCDate(t.getUTCDate() - 1);\n  return t.toISOString().slice(0, 10);\n};\nconst wib = (iso) => {\n  const t = new Date(new Date(iso).getTime() + 7 * 3600 * 1000).toISOString();\n  return `${tgl(t)} ${t.slice(11, 16)} WIB`;\n};\nconst channel = { sell_out: 'Sell-out (outlet → pelanggan)', sell_in: 'Sell-in (sales → outlet)' }[meta.channel] || meta.channel;\nconst rows = [\n  ['Judul', 'Rekap penjualan (snapshot otomatis)'],\n  ['Cakupan', meta.scope_name || `${meta.scope} ${meta.entity_id}`],\n  ['Channel', channel],\n  ['Periode', `${tgl(meta.period_start)} s.d. ${tgl(minusOneDay(meta.period_end_exclusive))}`],\n  ['Data lengkap sampai (watermark)', tgl(meta.watermark)],\n  ['Total omzet (IDR)', Number(meta.total_revenue_idr)],\n  ['Total kuantitas fisik (PCS)', Number(meta.quantity_pcs || 0)],\n  ['Total saldo terjual (IDR nominal)', Number(meta.quantity_idr || 0)],\n  ['Jumlah baris di tab Rekap', Number(meta.rows)],\n  ['Satuan omzet', meta.revenue_unit],\n  ['Waktu ambil data', wib(meta.generated_at)],\n  ['Diambil oleh', meta.principal],\n  ['Batch sumber', meta.source_batch_key],\n  ['Versi format', meta.export_version],\n  ['Catatan', meta.note],\n  ['Catatan periode', 'Hari setelah tanggal watermark berisi transaksi live yang mungkin belum lengkap.'],\n];\nreturn rows.map(([k, v]) => ({ json: { Keterangan: k, Nilai: v } }));\n"
+      }
+    },
+    {
+      "id": "sheetinfo",
+      "name": "Write Info tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Info"
         },
         "columns": {
           "mappingMode": "autoMapInputData",
@@ -258,18 +346,51 @@
       "main": [
         [
           {
-            "node": "CSV to rows",
+            "node": "Clear Info tab",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "CSV to rows": {
+    "Clear Info tab": {
       "main": [
         [
           {
-            "node": "Write Google Sheet",
+            "node": "Data rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data rows": {
+      "main": [
+        [
+          {
+            "node": "Write Rekap tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Rekap tab": {
+      "main": [
+        [
+          {
+            "node": "Info rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info rows": {
+      "main": [
+        [
+          {
+            "node": "Write Info tab",
             "type": "main",
             "index": 0
           }

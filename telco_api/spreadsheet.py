@@ -31,9 +31,14 @@ def export_sales_csv(db, p: Principal, scope: str, entity_id: int, channel: str,
               OR (%s='regency' AND dd.regency_id=%s) OR (%s='province' AND rr.province_id=%s))
             GROUP BY 1,2,3,4,5 ORDER BY 1,2,4''', (channel, start, end, scope, entity_id, scope, entity_id, scope, entity_id,
                                                   scope, entity_id)).fetchall()
-        return wm, rows
+        names = {'outlet': "SELECT code||' · '||name FROM telco.outlet WHERE id=%s",
+                 'district': "SELECT 'Kecamatan '||name||' ('||code||')' FROM telco.district WHERE id=%s",
+                 'regency': "SELECT name||' ('||code||')' FROM telco.regency WHERE id=%s",
+                 'province': "SELECT 'Provinsi '||name FROM telco.province WHERE id=%s"}
+        scope_name = conn.execute(names[scope], (entity_id,)).fetchone()[0]
+        return wm, rows, scope_name
 
-    wm, rows = db.read(q)
+    wm, rows, scope_name = db.read(q)
     total = sum((dec(r[6]) for r in rows), Decimal(0))
     qty_by_unit: dict[str, Decimal] = {}
     for r in rows:
@@ -43,7 +48,8 @@ def export_sales_csv(db, p: Principal, scope: str, entity_id: int, channel: str,
             'period_end_exclusive': end.isoformat(), 'timezone': 'Asia/Jakarta',
             'watermark': str(wm[0]) if wm else None, 'source_batch_key': wm[1] if wm else None,
             'revenue_unit': 'IDR net (tanpa pajak)', 'total_revenue_idr': money_str(total),
-            'quantity_by_unit': {k: str(v) for k, v in qty_by_unit.items()}, 'rows': len(rows),
+            'quantity_pcs': str(qty_by_unit.get('PCS', Decimal(0))), 'quantity_idr': str(qty_by_unit.get('IDR', Decimal(0))),
+            'scope_name': scope_name, 'rows': len(rows),
             'note': 'Rekap read-only; bukan sumber kebenaran stok. Quantity PCS dan IDR tidak dijumlahkan.'}
     buf = io.StringIO()
     for k, v in meta.items():

@@ -14,6 +14,13 @@ import argparse
 import json
 from pathlib import Path
 
+CODE_DIR = Path(__file__).resolve().parent / 'code'
+
+
+def js(name: str) -> str:
+    return (CODE_DIR / name).read_text(encoding='utf-8')
+
+
 RECAP_SHEET_ID = '1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg'
 CRED = {'svc': {'httpHeaderAuth': {'id': 'telcoApiService', 'name': 'TELCO API service token'}},
         'dispatch': {'httpHeaderAuth': {'id': 'telcoDispatchHeader', 'name': 'TELCO dispatch header'}},
@@ -156,26 +163,33 @@ def build(api: str) -> dict:
          'parameters': {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'clear',
                         'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
                         'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Rekap'}, 'clear': 'wholeSheet', 'keepFirstRow': False}},
-        {'id': 'rows', 'name': 'CSV to rows', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [660, 0],
-         'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems', 'jsCode': (
-             "// Metadata lines (# key: value) become a header block; data rows are kept as exported (no recalculation).\n"
-             "const text = $('Export CSV').first().json.csv || '';\n"
-             "const lines = text.split('\\n').filter(l => l.length);\n"
-             "const meta = lines.filter(l => l.startsWith('# ')).map(l => { const i = l.indexOf(': '); return { kolom_a: l.slice(2, i), kolom_b: l.slice(i + 2) }; });\n"
-             "const data = lines.filter(l => !l.startsWith('# '));\n"
-             "const header = data.shift().split(',');\n"
-             "const rows = data.map(l => { const v = l.split(','); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ''])); });\n"
-             "return [...meta.map(m => ({ json: { day_wib: '#' + m.kolom_a, outlet_code: m.kolom_b } })), ...rows.map(r => ({ json: r }))];")}},
-        {'id': 'sheet', 'name': 'Write Google Sheet', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [880, 0],
+        {'id': 'clearinfo', 'name': 'Clear Info tab', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [660, 160],
+         'credentials': CRED['sheets'], 'executeOnce': True,
+         'parameters': {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'clear',
+                        'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
+                        'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Info'}, 'clear': 'wholeSheet', 'keepFirstRow': False}},
+        {'id': 'rows', 'name': 'Data rows', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [880, 0],
+         'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems', 'jsCode': js('recap_rows.js')}},
+        {'id': 'sheet', 'name': 'Write Rekap tab', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [1100, 0],
          'credentials': CRED['sheets'],
          'parameters': {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'append',
                         'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
                         'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Rekap'},
                         'columns': {'mappingMode': 'autoMapInputData', 'value': {}, 'matchingColumns': [], 'schema': []},
                         'options': {}}},
+        {'id': 'info', 'name': 'Info rows', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [1320, 0], 'executeOnce': True,
+         'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems', 'jsCode': js('recap_info.js')}},
+        {'id': 'sheetinfo', 'name': 'Write Info tab', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [1540, 0],
+         'credentials': CRED['sheets'],
+         'parameters': {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'append',
+                        'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
+                        'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Info'},
+                        'columns': {'mappingMode': 'autoMapInputData', 'value': {}, 'matchingColumns': [], 'schema': []},
+                        'options': {}}},
     ]
     out['07_spreadsheet_recap'] = wf('telco07recap000001', 'TELCO 07 Spreadsheet recap (export snapshot)', recap_nodes,
-                                     chain(['Schedule', 'Recap params', 'Export CSV', 'Clear Rekap tab', 'CSV to rows', 'Write Google Sheet']))
+                                     chain(['Schedule', 'Recap params', 'Export CSV', 'Clear Rekap tab', 'Clear Info tab', 'Data rows',
+                                            'Write Rekap tab', 'Info rows', 'Write Info tab']))
 
     # 08: admin uploads a recap CSV -> API staging (hash, validation, preview). Posting needs admin confirm in dashboard.
     imp_nodes = [
@@ -210,7 +224,7 @@ LANES = [  # key, title, description, sticky color (n8n 1..7), active by default
     ('outbox', '06 · Pengirim pesan keluar (outbox)',
      'Tiap 20 detik: ambil antrean (SKIP LOCKED + lease), kirim, retry bertahap, dead-letter bila gagal permanen.', 3, True),
     ('recap', '07 · Rekap Google Sheet (NONAKTIF)',
-     'Export snapshot ter-scope (watermark, channel, satuan, total) → tab Rekap. Aktifkan setelah credential Google di-bind.', 4, False),
+     'Export snapshot ter-scope → tab Rekap (tabel data) + tab Info (watermark, channel, satuan, total). Aktifkan setelah credential Google di-bind.', 4, False),
     ('import', '08 · Import CSV → staging (NONAKTIF)',
      'Upload CSV admin → validasi & preview di API; posting hanya setelah konfirmasi admin di dashboard.', 2, False),
 ]
