@@ -87,14 +87,16 @@ class HermesAdapter:
         """Capability probe against the INSTALLED Hermes: endpoints + enabled toolsets must match the allowlist."""
         if not self.configured:
             return {'ok': False, 'reason': 'not_configured'}
-        if self._probe and not force and time.monotonic() - self._probe_at < 300:
+        # Successful probes are cached 5 min; failures only 15 s so a slow Hermes start does not disable it for long.
+        ttl = 300 if (self._probe or {}).get('ok') else 15
+        if self._probe and not force and time.monotonic() - self._probe_at < ttl:
             return self._probe
         base = self.s.hermes_base_url.rstrip('/')
         out = {'ok': False}
         try:
-            health = self.client.get(base + '/health', timeout=5)
-            caps = self.client.get(base + '/v1/capabilities', headers=self._h(), timeout=5).json()
-            toolsets = self.client.get(base + '/v1/toolsets', headers=self._h(), timeout=5).json()
+            health = self.client.get(base + '/health', timeout=15)
+            caps = self.client.get(base + '/v1/capabilities', headers=self._h(), timeout=15).json()
+            toolsets = self.client.get(base + '/v1/toolsets', headers=self._h(), timeout=15).json()
             if isinstance(toolsets, dict):
                 toolsets = toolsets.get('data', toolsets.get('toolsets', []))
             enabled = sorted(t['name'] for t in toolsets if t.get('enabled'))
@@ -154,7 +156,7 @@ class RouterFallback:
             for _ in range(max_rounds):
                 r = self.client.post(url, headers={'Authorization': f'Bearer {self.s.router_api_key.get_secret_value()}',
                                                    'X-Correlation-Id': correlation_id},
-                                     json={'model': self.s.fallback_model_id or self.s.model_id, 'messages': msgs,
+                                     json={'model': self.s.fallback_model_id or self.s.model_id, 'messages': msgs, 'stream': False,  # 9Router combos stream by default
                                            'tools': agent_tools.openai_tools(), 'tool_choice': 'auto'})
                 r.raise_for_status()
                 msg = r.json()['choices'][0]['message']
