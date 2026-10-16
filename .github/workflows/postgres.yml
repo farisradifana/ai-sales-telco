@@ -40,6 +40,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f sql/security_platform.sql
           psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f sql/validate_platform.sql
           python -m telco_api.provision roles
+          export READER_DATABASE_URL="postgresql://telco_api_reader:${TELCO_API_READER_PASSWORD}@localhost:5432/telco_test_template"
+          export WRITER_DATABASE_URL="postgresql://telco_api_writer:${TELCO_API_WRITER_PASSWORD}@localhost:5432/telco_test_template"
           OPS_DATABASE_URL="postgresql://telco_ops_login:${TELCO_OPS_PASSWORD}@localhost:5432/telco_test_template" python -m telco_api.provision demo
       - name: Reference server tests
         env: {DATABASE_URL: "postgresql://telco_owner:ci-only-owner-password@localhost:5432/telco_test_ci"}
