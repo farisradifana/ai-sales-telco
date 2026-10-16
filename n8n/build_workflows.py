@@ -275,10 +275,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--api-base', default='http://api:8000')
     ap.add_argument('--out', default='n8n/workflows')
+    ap.add_argument('--sheets-cred-id', help='bind the Google Sheets OAuth2 credential created in the n8n UI (its id)')
     ap.add_argument('--enable', default='', help='comma list of normally-off lanes to enable in 00: target,recap,import')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    if a.sheets_cred_id:
+        CRED['sheets'] = {'googleSheetsOAuth2Api': {'id': a.sheets_cred_id, 'name': 'Google Sheets recap'}}
     parts = build(a.api_base.rstrip('/'))
     parts['00_telco_all_in_one'] = build_combined(parts, frozenset(x for x in a.enable.split(',') if x))
     for name, w in parts.items():
