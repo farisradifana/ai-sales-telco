@@ -76,7 +76,7 @@ EVID = {'evidence_id': '11111111-2222-3333-4444-555555555555', 'channel': 'sell_
 def test_template_narrative_passes_verifier_and_mentions_evidence():
     text = narrative.diagnose_text(EVID)
     assert narrative.verify(text, [EVID]) == []
-    assert EVID['evidence_id'] in text and 'Juni 2026' in text and '-Rp5.173.100' in text and '(-70,55%)' in text
+    assert EVID['evidence_id'] not in text and 'Evidence ID' not in text and 'Juni 2026' in text and '-Rp5.173.100' in text and '(-70,55%)' in text
 
 
 def test_verifier_rejects_invented_numbers():
@@ -180,3 +180,9 @@ def test_live_mode_requires_allowlist():
                   wa_graph_base_url='https://graph.facebook.com')
     with pytest.raises(outbox.SendError):
         outbox.WhatsAppSender(s2)._guard('x')
+
+
+def test_scrub_ids_removes_technical_ids():
+    from telco_api.agent import scrub_ids
+    out = scrub_ids('Turun -Rp5.173.100.\nEvidence ID 11111111-2222-3333-4444-555555555555.\nSaran: kunjungi outlet.')
+    assert '1111' not in out and 'Evidence' not in out and '-Rp5.173.100' in out and 'Saran' in out

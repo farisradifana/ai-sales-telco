@@ -89,7 +89,7 @@ def main():
         'summary_has_confirmation_code': bool(code),
         'confirm_posted': steps[1]['reply'].startswith('Tercatat:'),
         'insight_from_hermes': steps[2]['narrative_source'] == 'hermes',
-        'insight_numbers_from_evidence': '-Rp5.173.100' in insight and 'Evidence ID' in insight,
+        'insight_numbers_from_evidence': '-Rp5.173.100' in insight and 'Evidence ID' not in insight,
         'follow_up_preserves_context': 'Konteks tetap: sell-out Outlet Fiktif 0001 (OUT-0001), September 2026 vs Juni 2026' in follow,
         'duplicate_ignored': dup['body'].get('duplicate') == 1 and dup['extra_replies'] == 0,
         'only_non_routable_recipients': all(s['to_prefix'] == '0099' for s in steps),

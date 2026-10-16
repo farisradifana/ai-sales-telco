@@ -325,7 +325,7 @@ def test_follow_up_preserves_context(login):
     r = c.post(f"/v1/contexts/{ctx['context_id']}/follow-up", json={'question': 'Solusinya apa? apa yang harus dilakukan?', 'expected_version': 1}).json()
     assert r['status'] == 'pinned' and r['version'] == 1 and r['evidence']['evidence_id'] == e['evidence_id']
     assert r['pinned']['scope'] == {'type': 'outlet', 'id': 1} and r['pinned']['channel'] == 'sell_out'
-    assert r['pinned']['current'] == ['2026-09-01', '2026-10-01'] and e['evidence_id'] in r['text']
+    assert r['pinned']['current'] == ['2026-09-01', '2026-10-01'] and e['evidence_id'] not in r['text'] and 'Evidence ID' not in r['text']
 
 
 def test_scope_change_requires_reauthorization(login, admin_conn):
@@ -379,7 +379,7 @@ def test_chart_and_narrative_match_evidence(login):
     svg = c.get(f"/v1/evidence/{e['evidence_id']}/chart.svg").text
     for d in e['drivers']:
         assert rupiah(d['delta_idr']) in svg
-    assert rupiah(e['revenue_baseline_idr']) in svg and rupiah(e['revenue_current_idr']) in svg and e['evidence_id'] in svg
+    assert rupiah(e['revenue_baseline_idr']) in svg and rupiah(e['revenue_current_idr']) in svg and e['evidence_id'] not in svg
     pts = waterfall_points(e)
     assert abs(sum(p['value'] for p in pts if p['kind'] == 'delta') - Decimal(e['delta_idr'])) <= Decimal('0.01')
     text = narrative.diagnose_text(e)
@@ -478,7 +478,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     run_n8n_like(c, settings, m3)
     dispatch(c, settings)
     body = mocks.wa_sent[-1]['text']['body']
-    assert mocks.hermes_calls == calls + 1 and '-Rp5.173.100' in body and 'Evidence ID' in body and '/charts/' in body
+    assert mocks.hermes_calls == calls + 1 and '-Rp5.173.100' in body and 'Evidence ID' not in body and '/charts/' in body
     # 4) follow-up keeps entity/channel/period
     m4 = 'wamid.TEST.' + uuid.uuid4().hex
     post_wa(c, settings, wa_payload(wa(S(1)), m4, 'apa yang harus dilakukan?'))

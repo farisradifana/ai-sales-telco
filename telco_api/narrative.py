@@ -1,4 +1,4 @@
-"""Indonesian narrative built ONLY from evidence, plus a verifier that rejects any model narrative containing a
+"""Indonesian narrative built ONLY from evidence (user-facing text carries no evidence id; ids stay in audit records), plus a verifier that rejects any model narrative containing a
 number that is not present in the evidence of the same turn."""
 import re
 from datetime import date, timedelta
@@ -47,7 +47,6 @@ def diagnose_text(e: dict) -> str:
         a = acts[0]
         lines.append(f"Saran: {a['action']} (pemilik: {a['owner']}, tinjau {a['review_in_days']} hari; ukuran: {a['success_metric']}).")
     lines.append('Batas bukti: stockout tidak diukur, data kompetitor/jaringan tidak tersedia; tindakan perlu konfirmasi manusia.')
-    lines.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(lines)
 
 
@@ -61,7 +60,6 @@ def recommendation_text(e: dict) -> str:
                    + f" Pemilik: {a['owner']}. Tinjau: {a['review_in_days']} hari. Sukses: {a['success_metric']}."
                    + (f" Guardrail: {a['guardrail']}" if a.get('guardrail') else ''))
     out.append('Semua tindakan adalah rencana; eksekusi stok/harga/kampanye butuh konfirmasi manusia.')
-    out.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(out)
 
 
@@ -71,7 +69,6 @@ def ranking_text(e: dict) -> str:
         g = f" ({pct_id(d['growth'])})" if d.get('growth') is not None else ''
         out.append(f"{i}. {d['district_name']}: {rupiah(d['delta_idr'])}{g}")
     out.append(e['next_step'])
-    out.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(out)
 
 
@@ -81,7 +78,6 @@ def regency_ranking_text(e: dict) -> str:
         g = f" ({pct_id(r['growth'])})" if r.get('growth') is not None else ''
         out.append(f"{i}. {r['regency_name']}: {rupiah(r['delta_idr'])}{g}")
     out.append(e['next_step'])
-    out.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(out)
 
 
@@ -93,14 +89,13 @@ def stock_text(e: dict) -> str:
         qs = f"{int(q):,}".replace(',', '.') if q == q.to_integral() else str(q)
         out.append(f"- {i['sku']}: {qs} {unit}")
     out.append('Satuan PCS dan saldo IDR tidak dijumlahkan.')
-    out.append(f"Evidence ID {e['evidence_id']}.")
     return '\n'.join(out)
 
 
 def target_text(e: dict, motivational: bool = False) -> str:
     ch = CHANNEL_ID[e['channel']]
     if not e.get('target_available'):
-        return f"Target {ch} untuk {e['target_date']} belum tersedia. Evidence ID {e['evidence_id']}."
+        return f"Target {ch} untuk {e['target_date']} belum tersedia."
     ratio = e.get('achievement_ratio')
     head = f"Target {ch} {e['target_date']}: realisasi {rupiah(e['actual_idr'])} dari {rupiah(e['target_idr'])}"
     head += f" ({pct_id(ratio, 1)})" if ratio is not None else ''
@@ -112,7 +107,7 @@ def target_text(e: dict, motivational: bool = False) -> str:
                 else ' Terima kasih, pertahankan kualitas input.')
     if e.get('intraday'):
         msg += ' (angka berjalan hari ini, belum final)'
-    return msg + f" Evidence ID {e['evidence_id']}."
+    return msg
 
 
 def _month(d: date) -> str:

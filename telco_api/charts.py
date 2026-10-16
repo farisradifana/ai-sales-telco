@@ -64,6 +64,6 @@ def render_waterfall(e: dict) -> str:
         out.append(f'<text x="8" y="{y + bar_h * .62:.1f}">{escape(p["label"][:34])}</text>')
         out.append(f'<rect x="{x0:.1f}" y="{y + 4:.1f}" width="{max(1.0, x1 - x0):.1f}" height="{bar_h - 8:.1f}" fill="{color}"/>')
         out.append(f'<text x="{x1 + 4:.1f}" y="{y + bar_h * .62:.1f}">{escape(rupiah(p["value"]))}</text>')
-    out.append(f'<text x="8" y="{h - 8}">Evidence {escape(e["evidence_id"])} · dekomposisi akuntansi, bukan sebab · '
+    out.append(f'<text x="8" y="{h - 8}">Dekomposisi akuntansi, bukan sebab · '
                f'{"PROVISIONAL" if not e.get("data_ready") else "final"}</text></svg>')
     return ''.join(out)

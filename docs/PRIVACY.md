@@ -50,9 +50,9 @@ halaman kontak di bawah.
 
 ## 7. Kontak
 
-Pertanyaan tentang kebijakan ini: buka *Issue* di
-https://github.com/farisradifana/ai-sales-telco/issues (jangan menuliskan data pribadi di Issue publik; minta kanal
-privat dan kami akan menghubungi Anda).
+Pertanyaan atau permintaan terkait data pribadi: **farisradifana@kata10.id**.
+Untuk masalah teknis non-pribadi dapat juga membuka *Issue* di https://github.com/farisradifana/ai-sales-telco/issues
+(jangan menuliskan data pribadi di Issue publik).
 
 ## 8. Perubahan
 
@@ -66,4 +66,4 @@ AI Sales Intellegence is an internal pilot sales assistant on WhatsApp. It only 
 messages from unregistered numbers are not processed or answered. Phone numbers are stored encrypted and never logged; we
 do not sell data or use it for advertising. Data is shared only with Meta (WhatsApp Cloud API) and the hosting/AI providers
 configured by the administrator, as needed to operate the service. Users may request access, correction or deletion via
-the administrator or the contact link above.
+the administrator or farisradifana@kata10.id.

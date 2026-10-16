@@ -87,6 +87,11 @@ def execute(db, ticket: str, name: str, arguments: dict) -> dict:
     return out
 
 
+def turn_calls(db, ticket: str) -> int:
+    r = db.write(lambda conn: conn.execute('SELECT calls FROM telco.agent_turn WHERE ticket_hash=%s', (ticket_hash(ticket),)).fetchone())
+    return int(r[0]) if r else 0
+
+
 def turn_evidence(db, ticket: str) -> list[str]:
     r = db.write(lambda conn: conn.execute('SELECT evidence_ids FROM telco.agent_turn WHERE ticket_hash=%s', (ticket_hash(ticket),)).fetchone())
     return [str(x) for x in (r[0] if r else [])]
