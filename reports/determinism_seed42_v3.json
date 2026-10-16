@@ -1,0 +1,31 @@
+{
+  "v3_runs_identical": true,
+  "counts": {
+    "province": 1,
+    "regency": 38,
+    "district": 666,
+    "sales": 666,
+    "stock_account": 786,
+    "outlet": 120,
+    "assignment": 120,
+    "org_position": 938,
+    "org_territory": 1409,
+    "product": 6,
+    "sales_target": 153120,
+    "outlet_day": 76560,
+    "supply": 100000,
+    "sell_in": 100000,
+    "sell_out": 400000,
+    "ingestion_watermark": 2
+  },
+  "organisation": {
+    "sales_area_reference": "data/reference/jatim_sales_area.csv",
+    "levels": {
+      "head_of_region": 1,
+      "head_of_sales": 2,
+      "head_of_branch": 38,
+      "territory_manager": 231,
+      "sales": 666
+    }
+  }
+}

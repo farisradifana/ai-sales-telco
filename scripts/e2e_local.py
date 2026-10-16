@@ -20,7 +20,7 @@ import psycopg
 
 API = 'http://127.0.0.1:8000'
 WA = 'http://127.0.0.1:8790'
-SENDER = '009900000001'  # sls-001 demo id, non-routable
+SENDER = ''  # set in main(): fresh non-routable test id bound to the district sales covering OUT-0001
 
 
 def sign_and_post(text: str, msg_id: str | None = None, raw: bytes | None = None):
@@ -50,6 +50,13 @@ def main():
     ap.add_argument('--report', default='reports/e2e_local.json')
     a = ap.parse_args()
     db = psycopg.connect(os.environ['ADMIN_DATABASE_URL'], autocommit=True)
+    global SENDER
+    from telco_api.identity import IdentityVault
+    from telco_api.settings import Settings
+    principal = db.execute('''SELECT p.principal_id FROM telco.assignment a JOIN telco.app_principal p ON p.sales_id=a.sales_id
+        WHERE a.outlet_id=1''').fetchone()[0]
+    SENDER = '0099' + str(uuid.uuid4().int)[:8]  # '0' prefix: never a valid E.164 number
+    IdentityVault(Settings(reader_database_url='postgresql://unused', writer_database_url='postgresql://unused')).register(db, SENDER, principal)
     steps, t0 = [], time.time()
 
     def count():

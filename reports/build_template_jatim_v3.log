@@ -1,0 +1,11 @@
+migrate: OK
+migrate: OK
+load: OK
+
+real	7m44.341s
+user	0m0.015s
+sys	0m0.031s
+validate: OK
+second load refused: OK
+demo: {'principals': 940, 'grants': 3332, 'wa_identities': 940, 'by_role': {'supervisor': 270, 'admin': 1, 'sales': 666, 'area_manager': 3}}
+TEMPLATE-READY telco_test_jatim_v3

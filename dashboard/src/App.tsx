@@ -33,7 +33,7 @@ function Login({ onDone }: { onDone: () => void }) {
       <p>Masuk untuk melihat cakupan outlet/kecamatan yang diizinkan untuk akun Anda.</p>
       <form onSubmit={submit}>
         <label htmlFor="pid">ID akun (demo lokal)</label>
-        <input id="pid" value={pid} onChange={(e) => setPid(e.target.value)} placeholder="mis. spv-r01" autoComplete="username" required />
+        <input id="pid" value={pid} onChange={(e) => setPid(e.target.value)} placeholder="mis. hob-35.19 / tm-35.19-01 / sls-35.19.01" autoComplete="username" required />
         <button type="submit">Masuk</button>
       </form>
       {err && <p className="error" role="alert">{err}</p>}
@@ -67,7 +67,8 @@ function PeriodPicker({ value, onApply }: { value: PeriodInput | null; onApply: 
 
 export default function App() {
   const [me, setMe] = useState<Me | null>(null);
-  const [authState, setAuth] = useState<'loading' | 'anon' | 'ok'>('loading');
+  const [authState, setAuth] = useState<'loading' | 'anon' | 'ok' | 'error'>('loading');
+  const [authErr, setAuthErr] = useState('');
   const [view, setView] = useState<ViewState | null>(null);
   const [dash, setDash] = useState<{ data?: Dashboard; error?: ApiError; loading: boolean; at?: number }>({ loading: false });
   const [now, setNow] = useState(Date.now());
@@ -81,9 +82,19 @@ export default function App() {
       const scope: ScopeType = h.scope ?? (firstDistrict && m.role !== 'sales' ? 'district' : 'outlet');
       const id = h.id ?? (scope === 'district' ? firstDistrict : firstOutlet);
       if (id) setView({ scope, id, channel: h.channel ?? 'sell_out', period: h.period ?? null });
-    }).catch((e: ApiError) => setAuth(e.status === 401 ? 'anon' : 'anon'));
+    }).catch((e: ApiError) => { if (e.status === 401) setAuth('anon'); else { setAuthErr(e.message); setAuth('error'); } });
   }, []);
   useEffect(loadMe, [loadMe]);
+  // Shared/bookmarked drill-through links: a changed hash re-applies scope/channel/period (writeHash uses replaceState,
+  // so our own updates do not loop back here).
+  useEffect(() => {
+    const onHash = () => {
+      const h = readHash();
+      setView((v) => (v && h.id && h.scope ? { scope: h.scope, id: h.id, channel: h.channel ?? v.channel, period: h.period ?? null } : v));
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
@@ -101,6 +112,9 @@ export default function App() {
   const options = useMemo(() => (view?.scope === 'district' ? me?.districts ?? [] : me?.outlets ?? []), [me, view?.scope]);
 
   if (authState === 'loading') return <p className="loading page">Memuat sesi…</p>;
+  if (authState === 'error') return (
+    <main className="page"><div className="error card" role="alert"><p>Layanan belum dapat dihubungi: {authErr}</p>
+      <button type="button" onClick={loadMe}>Coba lagi</button></div></main>);
   if (authState === 'anon' || !me) return <Login onDone={loadMe} />;
   if (!view) return <main className="page"><p className="empty">Akun ini belum memiliki cakupan outlet/kecamatan. Hubungi admin untuk provisioning izin.</p></main>;
 
@@ -111,7 +125,7 @@ export default function App() {
   return (
     <div className="page">
       <header className="top">
-        <div><h1>TELCO Sales Insight</h1><p className="muted">{me.display_name} · {me.role}</p></div>
+        <div><h1>TELCO Sales Insight</h1><p className="muted">{me.display_name}{me.org?.sales_area ? ` · Area ${me.org.sales_area}` : ''}{me.org?.manager_title ? ` · melapor ke ${me.org.manager_title}` : ''} · {me.districts.length} kecamatan · {me.outlets.length} outlet</p></div>
         <button type="button" className="secondary" onClick={() => api.logout().then(() => { setMe(null); setAuth('anon'); })}>Keluar</button>
       </header>
 

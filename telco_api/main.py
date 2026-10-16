@@ -145,7 +145,11 @@ def create_app(settings: Settings | None = None, db: Database | None = None, nar
     @app.get('/v1/me')
     def me(p: Principal = Depends(principal)):
         def q(conn):
-            return {'principal_id': p.principal_id, 'role': p.role, 'display_name': p.display_name, 'sales_id': p.sales_id,
+            o = conn.execute('''SELECT op.code,op.level,op.title,op.sales_area,mp.title,mp.level FROM telco.app_principal ap
+                JOIN telco.org_position op ON op.id=ap.org_position_id LEFT JOIN telco.org_position mp ON mp.id=op.parent_id
+                WHERE ap.principal_id=%s''', (p.principal_id,)).fetchone()
+            org = {'code': o[0], 'level': o[1], 'title': o[2], 'sales_area': o[3], 'manager_title': o[4], 'manager_level': o[5]} if o else None
+            return {'principal_id': p.principal_id, 'role': p.role, 'display_name': p.display_name, 'sales_id': p.sales_id, 'org': org,
                     'outlets': authz.outlets(conn, p), 'districts': authz.districts(conn, p),
                     'watermarks': {r[0]: str(r[1]) for r in conn.execute('SELECT source,complete_through FROM telco.ingestion_watermark')}}
         return database.read(q)

@@ -54,3 +54,22 @@ Semua harga dan revenue IDR tanpa pajak; `net_revenue=round(quantity*unit_price-
 Penjualan selesai bersifat append-only. Koreksi melalui reversal penuh dan transaksi pengganti. Pembatalan sell-in ditolak bila stok outlet tidak cukup untuk dikembalikan. Jangan menghapus transaksi untuk membetulkan input. Pembatalan saldo hanyalah skenario demo internal: di produksi, konfirmasi reversal operator terlebih dulu dan jangan otomatis mengembalikan saldo tanpa bukti.
 
 Tidak ada serial number SIM/voucher, expired lot, hutang/piutang, komisi, invoice multi-line, retur parsial, alih stok antarsales, atau integrasi operator nyata. Bila ditambah, buat event ledger dan migration baru dengan aturan unit serta audit yang sama; jangan memakai receipt sebagai jalan pintas transfer tanpa jejak.
+
+## Tabel platform (migration 005–008)
+
+| Tabel | Isi |
+|---|---|
+| app_principal | subjek terverifikasi server (peran, sales_id, org_position_id); tanpa nomor/email |
+| telco_identity.wa_identity | pemetaan WhatsApp → principal, AES-256-GCM + blind index HMAC, schema & role terpisah |
+| evidence_snapshot | hasil tool immutable (payload, digest, query_version, watermark, batch, correlation) |
+| conversation_context / conversation_pointer | konteks follow-up terstruktur, TTL, versi optimistik; pointer per principal+percakapan |
+| pending_action / action_audit | draft & persetujuan (konfirmasi sendiri / supervisor), hash konfirmasi, audit immutable |
+| posting_request | idempotensi external_key + hash payload (replay vs 409) |
+| price_policy | harga & batas diskon per produk/channel/periode |
+| stock_transfer | transfer stok antarsales (ledger source_kind `transfer`, 2 leg) |
+| correction_audit | jalur koreksi backdate supervisor (saldo kronologis minimum dicatat) |
+| inbound_event (+kolom) / outbox (+kolom) | status pemrosesan & lease, provider reference, dead-letter |
+| notification_pref / business_holiday | opt-in nudge target per channel, jam & hari kerja WIB |
+| agent_turn | ticket satu-turn untuk tool Hermes (hash saja) |
+| import_file / import_row | staging spreadsheet tervalidasi |
+| org_position / org_territory (+ v_org_coverage, v_org_chain) | hierarki Head of Region → Head of Sales → Head of Branch → Territory Manager → Sales |

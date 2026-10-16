@@ -50,6 +50,21 @@ def validate(directory):
     # Administrative codes nest by prefix (35 -> 35.xx -> 35.xx.yy), independent of the generator's id mapping.
     check('region code nesting',count('''SELECT count(*) FROM district d JOIN regency r ON r.id=d.regency_id JOIN province p ON p.id=r.province_id
       WHERE substr(d.code,1,length(r.code)+1)<>r.code||'.' OR substr(r.code,1,length(p.code)+1)<>p.code||'.' ''')==0)
+    # Organisation hierarchy (independent of generator logic).
+    lvl = lambda l: count(f"SELECT count(*) FROM org_position WHERE level='{l}'")
+    check('org: 1 head of region, 2 heads of sales, 38 heads of branch', (lvl('head_of_region'), lvl('head_of_sales'), lvl('head_of_branch')) == (1, 2, 38))
+    check('org: one sales per district', count("SELECT count(*) FROM district d LEFT JOIN org_position p ON p.level='sales' AND p.sales_id=d.id WHERE p.id IS NULL")==0
+          and lvl('sales') == count('SELECT count(*) FROM district'))
+    check('org: each head of sales covers 19 regencies', count('''SELECT count(*) FROM (SELECT t.position_id,count(*) n FROM org_territory t JOIN org_position p ON p.id=t.position_id
+      WHERE p.level='head_of_sales' GROUP BY 1) x WHERE n<>19''')==0)
+    check('org: territory manager covers 1..3 districts of one regency', count('''SELECT count(*) FROM (SELECT t.position_id,count(*) n,count(DISTINCT d.regency_id) r
+      FROM org_territory t JOIN org_position p ON p.id=t.position_id AND p.level='territory_manager' JOIN district d ON d.id=t.entity_id GROUP BY 1) x WHERE n NOT BETWEEN 1 AND 3 OR r<>1''')==0)
+    check('org: sales district inside its territory manager area', count('''SELECT count(*) FROM org_position s JOIN org_territory tm ON tm.position_id=s.parent_id
+      AND tm.entity_id=s.sales_id WHERE s.level='sales' ''')==lvl('sales'))
+    check('org: territory manager regency inside head of branch', count('''SELECT count(*) FROM org_position tm JOIN org_territory t ON t.position_id=tm.id
+      JOIN district d ON d.id=t.entity_id LEFT JOIN org_territory b ON b.position_id=tm.parent_id AND b.scope_type='regency' AND b.entity_id=d.regency_id
+      WHERE tm.level='territory_manager' AND b.position_id IS NULL''')==0)
+    check('assignment: outlet sales = district sales', count('SELECT count(*) FROM assignment a JOIN outlet o ON o.id=a.outlet_id WHERE a.sales_id<>o.district_id')==0)
     check('outlets have no coordinates (fictional outlet, real region)',count("SELECT count(*) FROM outlet WHERE latitude<>'' OR longitude<>''")==0)
     # Independent ledger reconstruction from source transactions.
     db.executescript('''CREATE TABLE ledger AS

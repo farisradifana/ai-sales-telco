@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 REGIONS = ROOT / 'data' / 'reference' / 'jatim_wilayah.csv'
 # Pinned extract of Kepmendagri 300.2.2-2430/2025 via cahyadsn/wilayah@d68e8d5 (see data/reference/SOURCE.md).
 REGIONS_SHA256 = '01f671e3d2c8bf969cb79baeffc5a93a4adc71f1c839a16c900bd8cbb579919d'
+SALES_AREA = ROOT / 'data' / 'reference' / 'jatim_sales_area.csv'
+TARGET_PER_OUTLET = {'sell_in': 350000, 'sell_out': 400000}  # fictional planning parameters per assigned outlet/day
+ANGKA = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas']
 PRODUCTS = [
     (1, 'SIM-NOVA-8', 'Perdana Fiktif Nova 8GB 30 Hari', 'PERDANA', 'PCS', 25000, '25000'),
     (2, 'SIM-NOVA-18', 'Perdana Fiktif Nova 18GB 30 Hari', 'PERDANA', 'PCS', 50000, '50000'),
@@ -36,6 +39,66 @@ def load_regions(path=None):
     dists = [(r['kode'], r['nama']) for r in rows if r['level'] == 'district']
     assert len(prov) == 1 and len(regs) == 38 and len(dists) == 666
     return prov[0], regs, dists
+
+
+def angka(n):
+    if n < 12:
+        return ANGKA[n]
+    if n < 20:
+        return ANGKA[n - 10] + ' Belas'
+    tens, ones = divmod(n, 10)
+    return (ANGKA[tens] + ' Puluh' + (' ' + ANGKA[ones] if ones else '')).replace('Satu Puluh', 'Sepuluh')
+
+
+def short_regency(name):
+    # 'Kabupaten Madiun' -> 'Madiun'; 'Kota Madiun' stays 'Kota Madiun' (avoids collision with the regency).
+    return name[len('Kabupaten '):] if name.startswith('Kabupaten ') else name
+
+
+def build_org(regs, dists, reg_id, by_reg, areas):
+    """Positions: 1 head of region, 2 heads of sales (EAST/WEST by data/reference/jatim_sales_area.csv), 1 head of branch
+    per regency, territory managers for each run of 3 districts (code order) inside a regency, 1 sales per district.
+    Persons are fictional role holders; ids/codes are deterministic."""
+    positions, territory = [], []
+    dist_name = {i + 1: n for i, (_, n) in enumerate(dists)}
+    dist_code = {i + 1: k for i, (k, _) in enumerate(dists)}
+    reg_name = {reg_id[k]: n for k, n in regs}
+    dup = Counter(dist_name.values())
+    positions.append((1, 'HOR-35', 'head_of_region', 'Head of Region Jawa Timur', '', '', ''))
+    territory.append((1, 'province', 1))
+    hos = {'WEST': 2, 'EAST': 3}
+    for area, pid in hos.items():
+        positions.append((pid, f'HOS-{area}', 'head_of_sales', f'Head of Sales {area.title()}', 1, area, ''))
+    nid = 4
+    for kode, nama in regs:
+        rid = reg_id[kode]
+        hob = nid
+        nid += 1
+        positions.append((hob, f'HOB-{kode}', 'head_of_branch', f'Head of Branch {short_regency(nama)}', hos[areas[kode]], areas[kode], ''))
+        territory.append((hob, 'regency', rid))
+        territory.append((hos[areas[kode]], 'regency', rid))
+        ds = by_reg[rid]
+        for k in range(0, len(ds), 3):
+            tm = nid
+            nid += 1
+            positions.append((tm, f'TM-{kode}-{k // 3 + 1:02}', 'territory_manager',
+                              f'Territory Manager {short_regency(nama)} {angka(k // 3 + 1)}', hob, areas[kode], ''))
+            for did in ds[k:k + 3]:
+                territory.append((tm, 'district', did))
+                sname = dist_name[did].replace(' ', '')
+                if dup[dist_name[did]] > 1:
+                    sname += '_' + short_regency(reg_name[rid]).replace(' ', '')
+                positions.append((nid, f'SLS-{dist_code[did]}', 'sales', f'Sales_{sname}', tm, areas[kode], did))
+                territory.append((nid, 'district', did))
+                nid += 1
+    return positions, territory
+
+
+def load_sales_area(path=None):
+    rows = list(csv.DictReader(Path(path or SALES_AREA).read_text(encoding='utf-8').splitlines()))
+    areas = {r['regency_kode']: r['sales_area'] for r in rows}
+    assert len(areas) == 38 and Counter(areas.values()) == {'EAST': 19, 'WEST': 19}, Counter(areas.values())
+    return areas
 
 
 def place_outlets(by_reg, n_outlets):
@@ -88,6 +151,8 @@ def generate(dest, seed=42, rows=500_000, regions=None):
         'sales_target': 'sales_id,target_date,channel,revenue_idr,rationale',
         'outlet_day': 'outlet_id,day,expected_open,sell_out_complete,sell_in_complete,visits_planned,visits_done,observed_stockout_minutes,observation_source',
         'ingestion_watermark': 'source,complete_through,batch_key',
+        'org_position': 'id,code,level,title,parent_id,sales_area,sales_id',
+        'org_territory': 'position_id,scope_type,entity_id',
     }
     for name, header in headers.items():
         table(name, header)
@@ -104,27 +169,35 @@ def generate(dest, seed=42, rows=500_000, regions=None):
             by_reg.setdefault(rid, []).append(did)
             emit('district', (did, rid, kode, nama))
         outlet_district = place_outlets(by_reg, 120)
-        for s in range(1, 13):
-            # Base district = district of the sales' first outlet; sales covers outlets (s-1)*10+1..s*10 as in v1.
-            emit('sales', (s, f'SLS-{s:03}', f'Sales Fiktif {s:03}', outlet_district[(s-1)*10]))
-            emit('stock_account', (s, s, ''))
+        positions, territory = build_org(regs, dists, reg_id, by_reg, load_sales_area())
+        # One sales person per district (sales.id = district.id); each holds a sales stock account.
+        for pos in positions:
+            if pos[2] == 'sales':
+                emit('sales', (pos[6], pos[1], pos[3], pos[6]))
+                emit('stock_account', (pos[6], pos[6], ''))
         for o in range(1, 121):
             d = outlet_district[o-1]
-            s = (o-1)//10+1
+            s = d  # outlet is covered by the sales of its district
             # Real administrative district, fictional outlet: no coordinates so no real location is implied.
             emit('outlet', (o, f'OUT-{o:04}', f'Outlet Fiktif {o:04}', d, f'Pemilik-SYN-{o:04}',
                             f'Alamat Fiktif No {o:04} (BUKAN ALAMAT NYATA)', '', '', START, 'true'))
             emit('assignment', (o, o, s, START, '2027-01-01'))
             emit('stock_account', (1000+o, '', o))
+        for pos in positions:
+            emit('org_position', pos)
+        for t in territory:
+            emit('org_territory', t)
+        sales_with_outlets = Counter(outlet_district)
         for p in PRODUCTS:
             emit('product', p)
         days = (END-START).days+1
         for offset in range(days):
             day = START + timedelta(days=offset)
-            for s in range(1, 13):
-                # Provisional planning assumptions, never fitted to generated outcomes.
-                for channel, target in [('sell_in', 3500000), ('sell_out', 4000000)]:
-                    emit('sales_target', (s, day, channel, target, 'Fictional planning target; validate with business owner'))
+            for s in sales_with_outlets:
+                # Provisional planning assumptions per assigned outlet, never fitted to generated outcomes.
+                for channel, per in TARGET_PER_OUTLET.items():
+                    emit('sales_target', (s, day, channel, per * sales_with_outlets[s],
+                                          'Fictional planning target per assigned outlet; validate with business owner'))
             for o in range(1, 121):
                 planned = int(day.weekday() in (0, 3))
                 missed = o <= 10 and day >= date(2026, 7, 1)
@@ -145,7 +218,7 @@ def generate(dest, seed=42, rows=500_000, regions=None):
             bundles.append((day, i, o, p, qs))
         bundles.sort(key=lambda b: (b[0], b[1]))
         for day, i, o, p, qs in bundles:
-            s = (o-1)//10+1
+            s = outlet_district[o-1]
             timestamp = lambda hour, second=0: datetime.combine(day, time(hour, 0, second), TZ).isoformat()
             total = sum(qs)
             price = PRODUCTS[p-1][6]
@@ -163,7 +236,8 @@ def generate(dest, seed=42, rows=500_000, regions=None):
     finally:
         for f in files.values():
             f.close()
-    manifest = {'generator_version': '2.0.0', 'regions': {'source': 'cahyadsn/wilayah@d68e8d5 (Kepmendagri 300.2.2-2430/2025)', 'sha256': REGIONS_SHA256, 'scope': 'Provinsi Jawa Timur: 38 kabupaten/kota, 666 kecamatan'}, 'seed': seed, 'rows': rows, 'sell_in_rows': rows//5,
+    manifest = {'generator_version': '3.0.0', 'organisation': {'sales_area_reference': 'data/reference/jatim_sales_area.csv',
+                'levels': dict(Counter(p[2] for p in positions))}, 'regions': {'source': 'cahyadsn/wilayah@d68e8d5 (Kepmendagri 300.2.2-2430/2025)', 'sha256': REGIONS_SHA256, 'scope': 'Provinsi Jawa Timur: 38 kabupaten/kota, 666 kecamatan'}, 'seed': seed, 'rows': rows, 'sell_in_rows': rows//5,
                 'sell_out_rows': rows*4//5, 'period': [str(START), str(END)], 'timezone': 'Asia/Jakarta',
                 'python_rng': 'random.Random / CPython 3.12 (pin for byte reproducibility)',
                 'grain': 'One completed product line per transaction ID',
@@ -174,7 +248,7 @@ def generate(dest, seed=42, rows=500_000, regions=None):
     (dest/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
     (dest/'scenario_truth.json').write_text(json.dumps({
         'synthetic_only': True, 'excluded_from_agent_evidence': True,
-        'scenario': 'Outlets OUT-0001..OUT-0010 (sales SLS-001) reduced bundle probability from July 2026; physical discount 10%; fewer recorded visits.',
+        'scenario': 'Outlets OUT-0001..OUT-0010 (each covered by its district sales) reduced bundle probability from July 2026; physical discount 10%; fewer recorded visits.',
         'no_causal_claim': 'Co-occurrence was designed; not evidence that missed visits cause lower demand.',
         'stock': 'Just-in-time exact receipts, no measured stockout, no customers lost dataset.',
         'limitations': 'Fixed four sell-out lines per receipt; daily zero final balances; no churn, baskets, real competition, taxes or COGS.'

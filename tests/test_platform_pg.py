@@ -14,6 +14,35 @@ import pytest
 
 pytestmark = pytest.mark.pg
 WIB = timezone(timedelta(hours=7))
+HOB = 'hob-35.01'  # Head of Branch Pacitan (outlets OUT-0001..0004)
+ORG: dict = {}
+
+
+@pytest.fixture(scope='module', autouse=True)
+def _org(clone_db, settings):
+    """Resolve principals from the org hierarchy: each outlet is covered by its district sales; approver = territory manager."""
+    with psycopg.connect(clone_db['admin']) as c:
+        ORG['sales'] = dict(c.execute('''SELECT a.outlet_id,p.principal_id FROM telco.assignment a
+            JOIN telco.app_principal p ON p.sales_id=a.sales_id''').fetchall())
+        ORG['tm'] = dict(c.execute('''SELECT o.id,ap.principal_id FROM telco.outlet o
+            JOIN telco.org_position s ON s.level='sales' AND s.sales_id=o.district_id
+            JOIN telco.app_principal ap ON ap.org_position_id=s.parent_id''').fetchall())
+    ORG['settings'], ORG['identity_url'], ORG['wa'] = settings, clone_db['identity'], {}
+
+
+def S(outlet_id: int) -> str:
+    return ORG['sales'][outlet_id]
+
+
+def wa(principal_id: str) -> str:
+    """Register (once) a non-routable WhatsApp test id ("0099..." is never valid E.164) for a principal."""
+    if principal_id not in ORG['wa']:
+        from telco_api.identity import IdentityVault
+        wa_id = '0099' + str(uuid.uuid4().int)[:8]
+        with psycopg.connect(ORG['identity_url']) as c:
+            IdentityVault(ORG['settings']).register(c, wa_id, principal_id)
+        ORG['wa'][principal_id] = wa_id
+    return ORG['wa'][principal_id]
 
 
 def err(r):
@@ -25,9 +54,7 @@ def now_iso(delta_s=0):
 
 
 def spv_for_outlet(admin_conn, outlet_id):
-    rid = admin_conn.execute('SELECT d.regency_id FROM telco.outlet o JOIN telco.district d ON d.id=o.district_id WHERE o.id=%s',
-                             (outlet_id,)).fetchone()[0]
-    return f'spv-r{rid:02d}'
+    return ORG['tm'][outlet_id]
 
 
 def svc(settings):
@@ -36,9 +63,9 @@ def svc(settings):
 
 # ============================================================ authorization / API contract
 def test_principal_cannot_see_other_scope(login, admin_conn):
-    spv = login('spv-r01')
+    spv = login(HOB)
     assert spv.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 111}).status_code == 403
-    s2 = login('sls-002')
+    s2 = login(S(2))
     r = s2.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1})
     assert r.status_code == 403 and 'Outlet Fiktif 0001' not in r.text
     assert s2.post('/v1/tools/stock', json={'account': 'outlet', 'outlet_id': 1}).status_code == 403
@@ -54,15 +81,15 @@ def test_principal_cannot_see_other_scope(login, admin_conn):
 
 
 def test_ranking_contains_only_authorized_districts(login, admin_conn):
-    r = login('spv-r01').post('/v1/tools/rank-districts', json={'channel': 'sell_out'})
+    r = login(HOB).post('/v1/tools/rank-districts', json={'channel': 'sell_out'})
     assert r.status_code == 200
     ids = {d['district_id'] for d in r.json()['districts']}
-    allowed = {x[0] for x in admin_conn.execute("SELECT entity_id FROM telco.principal_grant WHERE principal_id='spv-r01' AND scope_type='district'")}
+    allowed = {x[0] for x in admin_conn.execute("SELECT entity_id FROM telco.principal_grant WHERE principal_id=%s AND scope_type='district'", (HOB,))}
     assert ids <= allowed and len(allowed) < 666
 
 
 def test_context_and_evidence_are_private(login):
-    a, b = login('sls-001'), login('sls-002')
+    a, b = login(S(1)), login(S(2))
     e = a.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
     ctx = a.post('/v1/contexts', json={'evidence_id': e['evidence_id'], 'conversation_key': 'dash:test-private'}).json()
     assert b.get(f"/v1/contexts/{ctx['context_id']}").status_code == 404
@@ -96,7 +123,7 @@ def test_no_raw_sql_surface_and_injection_is_inert(login, app, settings, admin_c
     specs = raw.get('/internal/v1/agent-tools', headers=h).json()['tools']
     assert not any('sql' in t['name'] or 'sql' in json.dumps(t['input_schema']).lower().replace('sell', '') for t in specs)
     before = admin_conn.execute('SELECT count(*) FROM telco.sell_out').fetchone()[0]
-    c = login('sls-001')
+    c = login(S(1))
     r = c.post('/v1/tools/resolve-entity', json={'query': "OUT-0001'; DROP TABLE telco.sell_out; --"})
     assert r.status_code == 200 and r.json()['status'] == 'not_found'
     assert c.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': '1; DROP TABLE x'}).status_code == 400
@@ -105,12 +132,12 @@ def test_no_raw_sql_surface_and_injection_is_inert(login, app, settings, admin_c
 
 
 def test_ambiguous_name_needs_clarification(login):
-    r = login('sls-001').post('/v1/tools/resolve-entity', json={'query': 'Outlet Fiktif 000', 'scope': 'outlet'}).json()
+    r = login(HOB).post('/v1/tools/resolve-entity', json={'query': 'Outlet Fiktif 000', 'scope': 'outlet'}).json()
     assert r['status'] == 'ambiguous' and len(r['candidates']) > 1
 
 
 def test_zero_base_growth_null_and_missing_coverage_not_ready(login):
-    c = login('sls-001')
+    c = login(S(1))
     r = c.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1, 'baseline_start': '2024-12-02', 'baseline_end': '2025-01-01',
                                            'current_start': '2025-01-01', 'current_end': '2025-01-31'}).json()
     assert r['revenue_baseline_idr'] == '0' or r['revenue_baseline_idr'].startswith('0')
@@ -118,13 +145,13 @@ def test_zero_base_growth_null_and_missing_coverage_not_ready(login):
 
 
 def test_differing_periods_rejected(login):
-    r = login('sls-001').post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1, 'baseline_start': '2026-08-01',
+    r = login(S(1)).post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1, 'baseline_start': '2026-08-01',
                                                           'baseline_end': '2026-09-01', 'current_start': '2026-09-01', 'current_end': '2026-10-01'})
     assert r.status_code == 400 and err(r) == 'UNEQUAL_PERIODS'
 
 
 def test_missing_coverage_blocks_strong_diagnosis(login):
-    r = login('sls-001').post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1, 'baseline_start': '2026-08-17',
+    r = login(S(1)).post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1, 'baseline_start': '2026-08-17',
                                                           'baseline_end': '2026-09-16', 'current_start': '2026-09-16', 'current_end': '2026-10-16'}).json()
     assert r['data_ready'] is False and r['status'] == 'provisional' and 'watermark_behind_period' in r['issues']
     acts = r['recommendation']['actions']
@@ -132,7 +159,7 @@ def test_missing_coverage_blocks_strong_diagnosis(login):
 
 
 def test_default_period_and_reference_numbers(login):
-    r = login('sls-001').post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
+    r = login(S(1)).post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
     assert (r['baseline']['start'], r['current']['start'], r['current']['end_exclusive']) == ('2026-06-01', '2026-09-01', '2026-10-01')
     assert r['revenue_baseline_idr'] == '7332900.00' and r['revenue_current_idr'] == '2159800.00' and r['delta_idr'] == '-5173100.00'
     assert abs(float(r['reconciliation_residual_idr'])) <= 0.01
@@ -146,8 +173,8 @@ def _sale(outlet, product, qty, price, key=None, at=None):
 
 
 def test_concurrent_oversell_never_negative(login, admin_conn):
-    c1, c2 = login('sls-003'), login('sls-003')
-    acct = admin_conn.execute('SELECT id FROM telco.stock_account WHERE sales_id=3').fetchone()[0]
+    c1, c2 = login(S(21)), login(S(21))
+    acct = admin_conn.execute('SELECT id FROM telco.stock_account WHERE sales_id=(SELECT district_id FROM telco.outlet WHERE id=21)').fetchone()[0]
     avail = admin_conn.execute('SELECT quantity FROM telco.stock_balance WHERE account_id=%s AND product_id=2', (acct,)).fetchone()[0]
     qty = int(avail) // 2 + 1  # two of these cannot both fit
     barrier, results = threading.Barrier(2), []
@@ -169,7 +196,7 @@ def test_concurrent_oversell_never_negative(login, admin_conn):
 
 
 def test_idempotency_replay_and_conflict(login, admin_conn):
-    c = login('sls-003')
+    c = login(S(22))
     body = _sale(22, 3, 2, '10800', key='TEST-IDEM-' + uuid.uuid4().hex[:10])
     a = c.post('/v1/transactions/sell-in', json=body)
     b = c.post('/v1/transactions/sell-in', json=body)
@@ -179,12 +206,12 @@ def test_idempotency_replay_and_conflict(login, admin_conn):
     assert r.status_code == 409 and err(r) == 'IDEMPOTENCY_CONFLICT'
     with pytest.raises(psycopg.errors.UniqueViolation):
         admin_conn.execute('''INSERT INTO telco.sell_in(id,external_key,occurred_at,outlet_id,sales_id,assignment_id,product_id,quantity,unit_price)
-            VALUES(nextval('telco.sell_in_api_id'),%s,now(),22,3,22,3,1,10800)''', (body['external_key'] + '-1',))
+            VALUES(nextval('telco.sell_in_api_id'),%s,now(),22,(SELECT district_id FROM telco.outlet WHERE id=22),22,3,1,10800)''', (body['external_key'] + '-1',))
     admin_conn.rollback()
 
 
 def test_price_policy_enforced(login):
-    c = login('sls-003')
+    c = login(S(23))
     assert err(c.post('/v1/transactions/sell-in', json=_sale(23, 1, 1, '25000'))) == 'PRICE_POLICY_VIOLATION'
     d = c.post('/v1/transactions/drafts', json={'channel': 'sell_out', 'outlet_id': 23,
                                                 'lines': [{'sku': 'SIM-NOVA-8', 'quantity': 4, 'discount_idr': '20000'}]})
@@ -192,10 +219,10 @@ def test_price_policy_enforced(login):
 
 
 def test_reversal_restores_stock_and_revenue(login, admin_conn):
-    s4 = login('sls-004')
+    s4 = login(S(31))
     r = s4.post('/v1/transactions/sell-in', json=_sale(31, 1, 10, '22500')).json()
     tx = r['lines'][0]['transaction_id']
-    sales_acct = admin_conn.execute('SELECT id FROM telco.stock_account WHERE sales_id=4').fetchone()[0]
+    sales_acct = admin_conn.execute('SELECT id FROM telco.stock_account WHERE sales_id=(SELECT district_id FROM telco.outlet WHERE id=31)').fetchone()[0]
     before = admin_conn.execute('SELECT quantity FROM telco.stock_balance WHERE account_id=%s AND product_id=1', (sales_acct,)).fetchone()[0]
     req = s4.post('/v1/reversals', json={'channel': 'sell_in', 'transaction_id': tx, 'reason': 'Salah input outlet (tes)'}).json()
     assert s4.post(f"/v1/actions/{req['action_id']}/decision", json={'decision': 'approve'}).status_code == 403  # sales cannot approve
@@ -215,11 +242,11 @@ def test_reversal_restores_stock_and_revenue(login, admin_conn):
 def test_backdate_rules_and_audited_correction(login, admin_conn):
     # Times are anchored after the latest ledger movement of the holders involved (template age varies).
     last = admin_conn.execute("""SELECT max(occurred_at) FROM telco.stock_ledger WHERE product_id=3 AND account_id IN
-        ((SELECT id FROM telco.stock_account WHERE sales_id=5),(SELECT id FROM telco.stock_account WHERE outlet_id=41))""").fetchone()[0]
+        ((SELECT id FROM telco.stock_account WHERE sales_id=(SELECT district_id FROM telco.outlet WHERE id=41)),(SELECT id FROM telco.stock_account WHERE outlet_id=41))""").fetchone()[0]
     admin_conn.rollback()
     base = max(last + timedelta(seconds=1), datetime.now(timezone.utc) - timedelta(seconds=100))
     at = lambda s: (base + timedelta(seconds=s)).isoformat()  # noqa: E731
-    s5 = login('sls-005')
+    s5 = login(S(41))
     r = s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 5, '10800', at=at(0)))
     assert r.status_code == 200, r.text
     assert s5.post('/v1/transactions/sell-in', json=_sale(41, 3, 1, '10800', at=at(40))).status_code == 200
@@ -242,15 +269,15 @@ def test_backdate_rules_and_audited_correction(login, admin_conn):
 
 
 def test_assignment_validity(login, admin_conn):
-    admin_conn.execute("INSERT INTO telco.principal_grant(principal_id,scope_type,entity_id) VALUES('sls-001','outlet',11) ON CONFLICT DO NOTHING")
+    admin_conn.execute("INSERT INTO telco.principal_grant(principal_id,scope_type,entity_id) VALUES(%s,'outlet',2) ON CONFLICT DO NOTHING", (S(1),))
     admin_conn.commit()
     try:
-        r = login('sls-001').post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 11, 'lines': [{'sku': 'SIM-NOVA-8', 'quantity': 1}]})
+        r = login(S(1)).post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 2, 'lines': [{'sku': 'SIM-NOVA-8', 'quantity': 1}]})
         assert r.status_code == 422 and err(r) == 'INVALID_ASSIGNMENT'
     finally:
-        admin_conn.execute("DELETE FROM telco.principal_grant WHERE principal_id='sls-001' AND scope_type='outlet' AND entity_id=11")
+        admin_conn.execute("DELETE FROM telco.principal_grant WHERE principal_id=%s AND scope_type='outlet' AND entity_id=2", (S(1),))
         admin_conn.commit()
-    assert login('sls-001').post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 11,
+    assert login(S(1)).post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 2,
                                                                   'lines': [{'sku': 'SIM-NOVA-8', 'quantity': 1}]}).status_code == 403
 
 
@@ -265,7 +292,7 @@ def test_immutable_events(admin_conn):
 
 
 def test_draft_confirm_idempotent_and_expiry(login, admin_conn):
-    s6 = login('sls-006')
+    s6 = login(S(51))
     d = s6.post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 51, 'lines': [
         {'sku': 'SIM-NOVA-8', 'quantity': 3}, {'sku': 'BAL-NOVA-IDR', 'quantity': 100000}]}).json()
     assert 'Balas YA ' + d['confirm_code'] in d['summary'] and 'satuan tidak dijumlahkan' in d['summary']
@@ -293,7 +320,7 @@ def _ctx(c, outlet=1, key=None):
 
 
 def test_follow_up_preserves_context(login):
-    c = login('spv-r01')
+    c = login(HOB)
     e, ctx = _ctx(c)
     r = c.post(f"/v1/contexts/{ctx['context_id']}/follow-up", json={'question': 'Solusinya apa? apa yang harus dilakukan?', 'expected_version': 1}).json()
     assert r['status'] == 'pinned' and r['version'] == 1 and r['evidence']['evidence_id'] == e['evidence_id']
@@ -302,11 +329,11 @@ def test_follow_up_preserves_context(login):
 
 
 def test_scope_change_requires_reauthorization(login, admin_conn):
-    s1 = login('sls-001')
+    s1 = login('viewer-o1')
     _, ctx = _ctx(s1)
     r = s1.post(f"/v1/contexts/{ctx['context_id']}/follow-up", json={'question': 'kalau kecamatannya bagaimana?', 'expected_version': 1})
     assert r.status_code == 403
-    spv = login('spv-r01')
+    spv = login(HOB)
     _, ctx2 = _ctx(spv)
     r2 = spv.post(f"/v1/contexts/{ctx2['context_id']}/follow-up", json={'question': 'kalau kecamatannya bagaimana?', 'expected_version': 1}).json()
     did = admin_conn.execute('SELECT district_id FROM telco.outlet WHERE id=1').fetchone()[0]
@@ -316,7 +343,7 @@ def test_scope_change_requires_reauthorization(login, admin_conn):
 
 
 def test_stale_ttl_prompts_and_conflict_409(login, admin_conn):
-    c = login('spv-r01')
+    c = login(HOB)
     _, ctx = _ctx(c)
     r = c.post(f"/v1/contexts/{ctx['context_id']}/follow-up", json={'question': 'solusinya?', 'expected_version': 7})
     assert r.status_code == 409 and err(r) == 'CONTEXT_VERSION_CONFLICT'
@@ -327,7 +354,7 @@ def test_stale_ttl_prompts_and_conflict_409(login, admin_conn):
 
 
 def test_watermark_change_recomputes(login, admin_conn):
-    c = login('spv-r01')
+    c = login(HOB)
     e, ctx = _ctx(c)
     old = admin_conn.execute("SELECT batch_key FROM telco.ingestion_watermark WHERE source='sell_out'").fetchone()[0]
     admin_conn.execute("UPDATE telco.ingestion_watermark SET batch_key=%s WHERE source='sell_out'", (old + '-republished',))
@@ -347,7 +374,7 @@ def test_chart_and_narrative_match_evidence(login):
     from telco_api import narrative
     from telco_api.charts import waterfall_points
     from telco_api.money import rupiah
-    c = login('spv-r01')
+    c = login(HOB)
     e = c.post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
     svg = c.get(f"/v1/evidence/{e['evidence_id']}/chart.svg").text
     for d in e['drivers']:
@@ -360,7 +387,7 @@ def test_chart_and_narrative_match_evidence(login):
 
 
 def test_dashboard_snapshot_single_evidence(login):
-    c = login('spv-r01')
+    c = login(HOB)
     d = c.post('/v1/tools/dashboard', json={'scope': 'outlet', 'entity_id': 1, 'channel': 'sell_out'}).json()
     assert d['tool'] == 'dashboard' and d['diagnose_evidence_id'] and len(d['trend']) == 60
     known = [t for t in d['trend'] if t['revenue_idr'] is not None]
@@ -372,7 +399,7 @@ def test_dashboard_snapshot_single_evidence(login):
 
 
 def test_export_csv_scoped_with_metadata(login):
-    c = login('spv-r01')
+    c = login(HOB)
     r = c.get('/v1/exports/sales.csv', params={'scope': 'outlet', 'entity_id': 1, 'channel': 'sell_out', 'start': '2026-09-01', 'end': '2026-10-01'})
     assert r.status_code == 200 and '# watermark: 2026-09-30' in r.text and '# channel: sell_out' in r.text
     assert r.headers['x-export-total-revenue-idr'] == '2159800.00' and 'TOTAL' in r.text
@@ -413,7 +440,6 @@ def dispatch(client, settings, worker='test-worker'):
     return client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': worker}, headers=svc(settings)).json()
 
 
-WA1 = '009900000001'  # sls-001, non-routable test id
 
 
 def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
@@ -424,7 +450,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     assert c.get('/webhooks/whatsapp', params={'hub.mode': 'subscribe', 'hub.verify_token': 'wrong', 'hub.challenge': '1'}).status_code == 403
     # 1) sale input -> summary confirmation
     m1 = 'wamid.TEST.' + uuid.uuid4().hex
-    assert post_wa(c, settings, wa_payload(WA1, m1, 'SELLIN OUT-0001 SIM-NOVA-8 5, BAL-NOVA-IDR 50000')).json()['accepted'] == 1
+    assert post_wa(c, settings, wa_payload(wa(S(1)), m1, 'SELLIN OUT-0001 SIM-NOVA-8 5, BAL-NOVA-IDR 50000')).json()['accepted'] == 1
     n_before = len(mocks.n8n_received)
     dispatch(c, settings)
     assert any(x['message_id'] == m1 for x in mocks.n8n_received[n_before:])
@@ -437,7 +463,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     assert admin_conn.execute("SELECT count(*) FROM telco.sell_in WHERE external_key LIKE 'DRF-%%' AND outlet_id=1").fetchone()[0] == 0
     # 2) confirmation -> posted atomically
     m2 = 'wamid.TEST.' + uuid.uuid4().hex
-    post_wa(c, settings, wa_payload(WA1, m2, f'YA {code}'))
+    post_wa(c, settings, wa_payload(wa(S(1)), m2, f'YA {code}'))
     dispatch(c, settings)
     run_n8n_like(c, settings, m2)
     dispatch(c, settings)
@@ -447,7 +473,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     # 3) insight -> Hermes narrative from evidence -> chart link -> context
     calls = mocks.hermes_calls
     m3 = 'wamid.TEST.' + uuid.uuid4().hex
-    post_wa(c, settings, wa_payload(WA1, m3, 'kenapa omzet OUT-0001 turun?'))
+    post_wa(c, settings, wa_payload(wa(S(1)), m3, 'kenapa omzet OUT-0001 turun?'))
     dispatch(c, settings)
     run_n8n_like(c, settings, m3)
     dispatch(c, settings)
@@ -455,7 +481,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     assert mocks.hermes_calls == calls + 1 and '-Rp5.173.100' in body and 'Evidence ID' in body and '/charts/' in body
     # 4) follow-up keeps entity/channel/period
     m4 = 'wamid.TEST.' + uuid.uuid4().hex
-    post_wa(c, settings, wa_payload(WA1, m4, 'apa yang harus dilakukan?'))
+    post_wa(c, settings, wa_payload(wa(S(1)), m4, 'apa yang harus dilakukan?'))
     dispatch(c, settings)
     run_n8n_like(c, settings, m4)
     dispatch(c, settings)
@@ -469,14 +495,14 @@ def test_wa_duplicate_mismatch_invalid_signature(app, settings, admin_conn):
     from fastapi.testclient import TestClient
     c = TestClient(app, raise_server_exceptions=False)
     mid = 'wamid.TEST.' + uuid.uuid4().hex
-    raw = wa_payload(WA1, mid, 'stok', ts=1792130000)
+    raw = wa_payload(wa(S(1)), mid, 'stok', ts=1792130000)
     assert post_wa(c, settings, raw).json()['accepted'] == 1
     assert post_wa(c, settings, raw).json()['duplicate'] == 1
     assert admin_conn.execute('SELECT count(*) FROM telco.outbox WHERE idempotency_key=%s', (f'dispatch:whatsapp:{mid}',)).fetchone()[0] == 1
-    r = post_wa(c, settings, wa_payload(WA1, mid, 'target', ts=1792130000))
+    r = post_wa(c, settings, wa_payload(wa(S(1)), mid, 'target', ts=1792130000))
     assert r.status_code == 409 and err(r) == 'DUPLICATE_PAYLOAD_MISMATCH'
     bad_id = 'wamid.TEST.' + uuid.uuid4().hex
-    r = post_wa(c, settings, wa_payload(WA1, bad_id, 'stok'), sig='sha256=' + '0' * 64)
+    r = post_wa(c, settings, wa_payload(wa(S(1)), bad_id, 'stok'), sig='sha256=' + '0' * 64)
     assert r.status_code == 401
     assert admin_conn.execute('SELECT count(*) FROM telco.inbound_event WHERE message_id=%s', (bad_id,)).fetchone()[0] == 0
     # unknown sender: stored for audit, never dispatched or replied to
@@ -490,8 +516,8 @@ def test_wa_out_of_order_and_idempotent_steps(app, settings, mocks):
     c = TestClient(app, raise_server_exceptions=False)
     t0 = int(time.time())
     early, late = 'wamid.TEST.E' + uuid.uuid4().hex, 'wamid.TEST.L' + uuid.uuid4().hex
-    post_wa(c, settings, wa_payload('009900000002', late, 'stok', ts=t0 + 5))
-    post_wa(c, settings, wa_payload('009900000002', early, 'target sell-in', ts=t0))
+    post_wa(c, settings, wa_payload(wa(S(2)), late, 'stok', ts=t0 + 5))
+    post_wa(c, settings, wa_payload(wa(S(2)), early, 'target sell-in', ts=t0))
     run_n8n_like(c, settings, late)
     claim = run_n8n_like(c, settings, early)
     assert claim['out_of_order'] is True
@@ -503,7 +529,7 @@ def test_wa_out_of_order_and_idempotent_steps(app, settings, mocks):
 def test_outbox_crash_before_send_and_after_send(app, settings, mocks, db, admin_conn):
     from telco_api import outbox
     key = 'test-crash-' + uuid.uuid4().hex
-    db.write(lambda conn: outbox.enqueue(conn, 'sls-001', 'whatsapp_text', {'text': 'tes crash'}, key, 'corr-test'))
+    db.write(lambda conn: outbox.enqueue(conn, S(1), 'whatsapp_text', {'text': 'tes crash'}, key, 'corr-test'))
     # (a) crash after claim commit, before send: nothing sent, lease expires, re-claimed and sent exactly once
     rows = db.write(lambda conn: outbox.claim(conn, 50, 30, 'dead-worker'))
     assert any(r['idempotency_key'] == key for r in rows)
@@ -516,7 +542,7 @@ def test_outbox_crash_before_send_and_after_send(app, settings, mocks, db, admin
     assert sum(1 for m in mocks.wa_sent[n:] if m['biz_opaque_callback_data'] == key) == 1
     # (b) crash after provider accepted, before ACK -> at-least-once duplicate after lease expiry (documented)
     key2 = 'test-crash2-' + uuid.uuid4().hex
-    db.write(lambda conn: outbox.enqueue(conn, 'sls-001', 'whatsapp_text', {'text': 'tes crash 2'}, key2, 'corr-test'))
+    db.write(lambda conn: outbox.enqueue(conn, S(1), 'whatsapp_text', {'text': 'tes crash 2'}, key2, 'corr-test'))
 
     class Crash(Exception):
         pass
@@ -557,12 +583,12 @@ def test_outbox_retry_and_dead_letter(app, settings, mocks, db, admin_conn):
     c = TestClient(app, raise_server_exceptions=False)
     dispatch(c, settings)  # drain
     k1, k2 = 'test-retry-' + uuid.uuid4().hex, 'test-dead-' + uuid.uuid4().hex
-    db.write(lambda conn: outbox.enqueue(conn, 'sls-001', 'whatsapp_text', {'text': 'retry'}, k1, 'corr-test'))
+    db.write(lambda conn: outbox.enqueue(conn, S(1), 'whatsapp_text', {'text': 'retry'}, k1, 'corr-test'))
     mocks.wa_fail[:] = [503]
     dispatch(c, settings)
     st, att, nxt = admin_conn.execute('SELECT state,attempts,next_attempt_at>now() FROM telco.outbox WHERE idempotency_key=%s', (k1,)).fetchone()
     assert (st, att, nxt) == ('pending', 1, True)
-    db.write(lambda conn: outbox.enqueue(conn, 'sls-001', 'whatsapp_text', {'text': 'dead'}, k2, 'corr-test'))
+    db.write(lambda conn: outbox.enqueue(conn, S(1), 'whatsapp_text', {'text': 'dead'}, k2, 'corr-test'))
     mocks.wa_fail[:] = [400]
     dispatch(c, settings)
     admin_conn.rollback()
@@ -574,8 +600,8 @@ def test_narrator_fallbacks_and_no_numbers_when_tools_fail(app, settings, mocks,
     from fastapi.testclient import TestClient
     c = TestClient(app, raise_server_exceptions=False)
     narrator = app.state.pipeline.narrator
-    p = narrator.db.write(lambda conn: __import__('telco_api.security', fromlist=['load_principal']).load_principal(conn, 'sls-001', 'jwt'))
-    e = login('sls-001').post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
+    p = narrator.db.write(lambda conn: __import__('telco_api.security', fromlist=['load_principal']).load_principal(conn, S(1), 'jwt'))
+    e = login(S(1)).post('/v1/tools/diagnose', json={'scope': 'outlet', 'entity_id': 1}).json()
     from telco_api.money import json_loads
     e = json_loads(json.dumps(e))
     for mode, expected in (('good', 'hermes'), ('fabricate', 'router_fallback'), ('down', 'router_fallback'), ('toolset_violation', 'router_fallback')):
@@ -591,7 +617,7 @@ def test_narrator_fallbacks_and_no_numbers_when_tools_fail(app, settings, mocks,
     from telco_api import analytics, errors
     monkeypatch.setattr(analytics, 'diagnose', lambda *a, **k: (_ for _ in ()).throw(errors.unavailable('DB_UNAVAILABLE', 'db down')))
     mid = 'wamid.TEST.' + uuid.uuid4().hex
-    post_wa(c, settings, wa_payload(WA1, mid, 'kenapa omzet OUT-0002 turun?'))
+    post_wa(c, settings, wa_payload(wa(S(1)), mid, 'kenapa omzet OUT-0001 turun?'))
     h, ref = svc(settings), {'provider': 'whatsapp', 'message_id': mid}
     c.post('/internal/v1/events/claim', json=ref, headers=h)
     r = c.post('/internal/v1/events/act', json=ref, headers=h)
@@ -608,7 +634,8 @@ def test_daily_target_nudge_once_per_day(app, settings, admin_conn):
     assert a['due'] == 2 and a['enqueued'] == 2
     b = c.post('/internal/v1/targets/nudges', json={'now': friday_16}, headers=svc(settings)).json()
     assert b['enqueued'] == 0 and b['already_sent'] == 2
-    txt = admin_conn.execute("SELECT payload->>'text' FROM telco.outbox WHERE idempotency_key='target:sls-001:2026-10-16:sell_in'").fetchone()[0]
+    first = admin_conn.execute("SELECT principal_id FROM telco.notification_pref WHERE daily_target_opt_in ORDER BY principal_id LIMIT 1").fetchone()[0]
+    txt = admin_conn.execute("SELECT payload->>'text' FROM telco.outbox WHERE idempotency_key=%s", (f'target:{first}:2026-10-16:sell_in',)).fetchone()[0]
     assert 'Target sell-in 2026-10-16: realisasi' in txt and 'STOP TARGET' in txt
     sat = c.post('/internal/v1/targets/nudges', json={'now': '2026-10-17T16:05:00+07:00'}, headers=svc(settings)).json()
     assert sat['due'] == 0

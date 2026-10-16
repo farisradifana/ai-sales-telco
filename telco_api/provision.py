@@ -42,11 +42,20 @@ def roles(url: str) -> None:
     print('roles: OK')
 
 
+ROLE_BY_LEVEL = {'sales': 'sales', 'territory_manager': 'supervisor', 'head_of_branch': 'supervisor',
+                 'head_of_sales': 'area_manager', 'head_of_region': 'area_manager'}
+
+
+def principal_id_for(code: str) -> str:
+    # HOR-35 -> hor-35, HOS-EAST -> hos-east, HOB-35.19 -> hob-35.19, TM-35.19-01 -> tm-35.19-01, SLS-35.19.01 -> sls-35.19.01
+    return code.lower()
+
+
 def demo(url: str, today: date | None = None) -> dict:
+    """Principals and grants derived from the org hierarchy (telco.org_position / v_org_coverage). Fictional persons."""
     s = get_settings()
     vault = IdentityVault(s)
     today = today or datetime.now(timezone(timedelta(hours=7))).date()
-    out = {}
     with psycopg.connect(url) as c:
         c.execute("SET application_name='telco-provision'")
         products = c.execute('SELECT id,sku,stock_unit,list_price FROM telco.product ORDER BY id').fetchall()
@@ -56,48 +65,39 @@ def demo(url: str, today: date | None = None) -> dict:
             for ch, price, pct in (('sell_out', lp, 10 if unit == 'PCS' else 0), ('sell_in', si_price, 0)):
                 c.execute('''INSERT INTO telco.price_policy(product_id,channel,unit_price,max_discount_pct,valid_from,valid_to)
                     VALUES(%s,%s,%s,%s,'2025-01-01','2027-01-01') ON CONFLICT DO NOTHING''', (pid, ch, price, pct))
-        sales = c.execute('SELECT id,code,district_id FROM telco.sales ORDER BY id').fetchall()
-        for sid, code, did in sales:
-            pid_ = f'sls-{sid:03d}'
-            c.execute('''INSERT INTO telco.app_principal(principal_id,role,sales_id,display_name) VALUES(%s,'sales',%s,%s)
-                ON CONFLICT DO NOTHING''', (pid_, sid, f'Sales Fiktif {sid:03d}'))
-            for (oid,) in c.execute('SELECT DISTINCT outlet_id FROM telco.assignment WHERE sales_id=%s AND valid_to>%s', (sid, today)).fetchall():
-                _grant(c, pid_, 'outlet', oid)
-            c.execute('''INSERT INTO telco.notification_pref(principal_id,target_channel,daily_target_opt_in,send_hour_wib)
-                VALUES(%s,'sell_in',%s,16) ON CONFLICT DO NOTHING''', (pid_, sid <= 2))
-        regs = c.execute('SELECT id FROM telco.regency ORDER BY id').fetchall()
-        for (rid,) in regs:
-            pid_ = f'spv-r{rid:02d}'
-            c.execute('''INSERT INTO telco.app_principal(principal_id,role,display_name) VALUES(%s,'supervisor',%s) ON CONFLICT DO NOTHING''',
-                      (pid_, f'Supervisor Fiktif Kab {rid:02d}'))
-            for (did,) in c.execute('SELECT id FROM telco.district WHERE regency_id=%s', (rid,)).fetchall():
+        positions = c.execute('SELECT id,code,level,title,sales_id FROM telco.org_position ORDER BY id').fetchall()
+        for pos_id, code, level, title, sales_id in positions:
+            pid_ = principal_id_for(code)
+            c.execute('''INSERT INTO telco.app_principal(principal_id,role,sales_id,display_name,org_position_id) VALUES(%s,%s,%s,%s,%s)
+                ON CONFLICT DO NOTHING''', (pid_, ROLE_BY_LEVEL[level], sales_id, title, pos_id))
+            for (did,) in c.execute('SELECT district_id FROM telco.v_org_coverage WHERE position_id=%s ORDER BY 1', (pos_id,)).fetchall():
                 _grant(c, pid_, 'district', did)
-        c.execute('''INSERT INTO telco.app_principal(principal_id,role,display_name) VALUES('am-all','area_manager','Area Manager Fiktif')
-            ON CONFLICT DO NOTHING''')
-        for (did,) in c.execute('SELECT id FROM telco.district').fetchall():
-            _grant(c, 'am-all', 'district', did)
         c.execute('''INSERT INTO telco.app_principal(principal_id,role,display_name) VALUES('adm-ops','admin','Admin Ops Fiktif') ON CONFLICT DO NOTHING''')
         _grant(c, 'adm-ops', 'district', 1)
-        # Outlet-only supervisor-like viewer: proves outlet grant does NOT imply district aggregate.
+        # Outlet-only viewer: proves an outlet grant does NOT imply the district aggregate.
         c.execute('''INSERT INTO telco.app_principal(principal_id,role,display_name) VALUES('viewer-o1','supervisor','Viewer Outlet 1 Fiktif')
             ON CONFLICT DO NOTHING''')
         _grant(c, 'viewer-o1', 'outlet', 1)
-        # Non-routable WhatsApp test identities.
-        for i, (sid, _, _) in enumerate(sales, 1):
-            vault.register(c, f'{DEMO_WA_PREFIX}{i:08d}', f'sls-{sid:03d}')
-        for rid, in regs:
-            vault.register(c, f'{DEMO_WA_PREFIX}9{rid:07d}', f'spv-r{rid:02d}')
-        # Demo targets for the live posting window (dataset targets stop 2026-09-30). Fictional parameters.
+        active_sales = c.execute('''SELECT a.sales_id,count(*) FROM telco.assignment a WHERE a.valid_to>%s GROUP BY 1 ORDER BY 1''',
+                                 (today,)).fetchall()
+        for i, (sid, _) in enumerate(active_sales):
+            c.execute('''INSERT INTO telco.notification_pref(principal_id,target_channel,daily_target_opt_in,send_hour_wib)
+                SELECT principal_id,'sell_in',%s,16 FROM telco.app_principal WHERE sales_id=%s ON CONFLICT DO NOTHING''', (i < 2, sid))
+        # Non-routable WhatsApp test identities for every principal ("0099" + 8 digits, never valid E.164).
+        for i, (pid_,) in enumerate(c.execute('SELECT principal_id FROM telco.app_principal ORDER BY org_position_id NULLS LAST,principal_id').fetchall(), 1):
+            vault.register(c, f'{DEMO_WA_PREFIX}{i:08d}', pid_)
+        # Demo targets for the live posting window (dataset targets stop 2026-09-30). Fictional, per assigned outlet.
         start = date(2026, 10, 1)
         for d in range(0, 92):
             day = start + timedelta(days=d)
-            for sid, _, _ in sales:
-                for ch, amt in (('sell_in', 3500000), ('sell_out', 4000000)):
+            for sid, n_outlets in active_sales:
+                for ch, per in (('sell_in', 350000), ('sell_out', 400000)):
                     c.execute('''INSERT INTO telco.sales_target(sales_id,target_date,channel,revenue_idr,rationale) VALUES(%s,%s,%s,%s,
-                        'Fictional demo planning target; validate with business owner') ON CONFLICT DO NOTHING''', (sid, day, ch, amt))
-        # Evidenced demo receipts (opening stock) for each sales holder; idempotent by external_key.
+                        'Fictional demo planning target per assigned outlet; validate with business owner') ON CONFLICT DO NOTHING''',
+                              (sid, day, ch, per * n_outlets))
+        # Evidenced demo receipts (opening stock) for sales holders that cover outlets; idempotent by external_key.
         now = datetime.now(timezone.utc)
-        for sid, _, _ in sales:
+        for sid, _ in active_sales:
             acct = c.execute('SELECT id FROM telco.stock_account WHERE sales_id=%s', (sid,)).fetchone()[0]
             for pid, sku, unit, _ in products:
                 key = f'DEMO-SUP-{today.isoformat()}-{sid}-{pid}'
@@ -108,7 +108,8 @@ def demo(url: str, today: date | None = None) -> dict:
         c.commit()
         out = {'principals': c.execute('SELECT count(*) FROM telco.app_principal').fetchone()[0],
                'grants': c.execute('SELECT count(*) FROM telco.principal_grant').fetchone()[0],
-               'wa_identities': c.execute('SELECT count(*) FROM telco_identity.wa_identity').fetchone()[0]}
+               'wa_identities': c.execute('SELECT count(*) FROM telco_identity.wa_identity').fetchone()[0],
+               'by_role': dict(c.execute('SELECT role,count(*) FROM telco.app_principal GROUP BY 1').fetchall())}
     print('demo:', out)
     return out
 

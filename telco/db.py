@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ORDER = ['province','regency','district','sales','outlet','product','assignment','stock_account',
+ORDER = ['province','regency','district','sales','org_position','org_territory','outlet','product','assignment','stock_account',
          'supply','sell_in','sell_out','sales_target','outlet_day','ingestion_watermark']
 
 

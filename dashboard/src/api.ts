@@ -7,6 +7,7 @@ export interface Me {
   role: 'sales' | 'supervisor' | 'area_manager' | 'admin';
   display_name: string;
   sales_id: number | null;
+  org: { code: string; level: string; title: string; sales_area: string | null; manager_title: string | null } | null;
   outlets: { id: number; code: string; name: string; district_id: number; district_name: string }[];
   districts: { id: number; code: string; name: string }[];
   watermarks: Record<string, string>;

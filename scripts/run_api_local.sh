@@ -2,7 +2,7 @@
 # Local API on 127.0.0.1:8000 against a disposable DB (default telco_test_dev). Mock-only external services.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-DB=${DB:-telco_test_dev} . scripts/devenv.sh
+DB=${DB:-telco_test_dev3} . scripts/devenv.sh
 export READER_DATABASE_URL WRITER_DATABASE_URL IDENTITY_DATABASE_URL
 export WA_SEND_MODE=${LOCAL_WA_SEND_MODE:-mock} WA_GRAPH_BASE_URL=${WA_GRAPH_BASE_URL:-http://127.0.0.1:8790}
 export N8N_DISPATCH_URL=${N8N_DISPATCH_URL:-http://127.0.0.1:${LOCAL_N8N_PORT:-5688}/webhook/telco-inbound}

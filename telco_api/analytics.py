@@ -6,7 +6,7 @@ from decimal import Decimal
 from telco import tools as ref_tools
 
 from . import authz, errors, evidence, periods
-from .money import dec, money_str, stringify_money
+from .money import dec, rupiah, stringify_money
 from .security import Principal
 
 QUERY_VERSION = 'diagnose-v1'
@@ -88,8 +88,8 @@ def recommend(e: dict, entity: dict) -> dict:
             item['guardrail'] = 'Bandingkan dengan outlet kontrol sepadan; jangan menambah diskon.'
         elif 'product_id' in a and neg:
             d = neg[0]
-            item['fact'] = (f"SKU {d['product']} berubah {money_str(d['delta_idr'])} IDR (volume {money_str(d['volume_effect_idr'])}, "
-                            f"harga/mix {money_str(d['price_mix_effect_idr'])}, masuk/keluar {money_str(d['entry_exit_effect_idr'])}).")
+            item['fact'] = (f"SKU {d['product']} berubah {rupiah(d['delta_idr'])} (volume {rupiah(d['volume_effect_idr'])}, "
+                            f"harga/mix {rupiah(d['price_mix_effect_idr'])}, masuk/keluar {rupiah(d['entry_exit_effect_idr'])}).")
             item['hypothesis'] = 'Permintaan, input, harga efektif atau ketersediaan SKU ini berubah; perlu dicek di lapangan.'
             item['guardrail'] = 'Cek kebutuhan dan ketersediaan sebelum reorder; batasi biaya diskon.'
         else:
