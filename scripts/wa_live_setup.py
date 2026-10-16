@@ -20,7 +20,16 @@ from pathlib import Path
 
 LIVE = Path('.local/live.env')
 KEYS = ['WA_PHONE_NUMBER_ID', 'WA_WABA_ID', 'WA_ACCESS_TOKEN', 'WA_APP_SECRET', 'WA_VERIFY_TOKEN', 'WA_LIVE_ALLOWLIST_HMACS',
-        'WA_GRAPH_VERSION']
+        'WA_GRAPH_VERSION', 'ROUTER_BASE_URL', 'ROUTER_API_KEY', 'MODEL_ID', 'FALLBACK_MODEL_ID']
+COMMENTS = {  # comment lines written above a key
+    'WA_PHONE_NUMBER_ID': ['# --- WhatsApp Cloud API (Meta) ---'],
+    'ROUTER_BASE_URL': ['# --- Model AI via 9Router (provider berizin dengan API key, BUKAN login akun langganan) ---',
+                        '# ROUTER_BASE_URL : alamat 9Router lokal, tanpa /v1 (default http://127.0.0.1:20128)',
+                        '# ROUTER_API_KEY  : API key klien yang dibuat di dashboard 9Router (kosongkan bila tidak diminta)',
+                        '# MODEL_ID        : nama model PERSIS seperti tampil di 9Router',
+                        '# FALLBACK_MODEL_ID (opsional): model cadangan di 9Router bila model utama gagal'],
+}
+DEFAULTS = {'WA_GRAPH_VERSION': 'v23.0', 'ROUTER_BASE_URL': 'http://127.0.0.1:20128'}
 
 
 def read() -> dict:
@@ -36,7 +45,12 @@ def read() -> dict:
 def write(vals: dict) -> None:
     LIVE.parent.mkdir(exist_ok=True)
     lines = ['# Live WhatsApp Cloud API config (gitignored). Never paste these values into chat or commits.']
-    lines += [f'{k}={vals.get(k, "")}' for k in KEYS]
+    for k in KEYS:
+        if k in COMMENTS:
+            lines.extend(COMMENTS[k])
+        lines.append(f'{k}={vals.get(k) or DEFAULTS.get(k, "")}')
+    # Keep any extra keys the owner added by hand.
+    lines += [f'{k}={v}' for k, v in vals.items() if k not in KEYS]
     LIVE.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
