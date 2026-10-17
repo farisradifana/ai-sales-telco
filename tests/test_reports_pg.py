@@ -127,3 +127,29 @@ def test_ai_report_numbers_verified_or_template(client, settings, clone_db, org,
     client.post('/internal/v1/agent-tools/report', json={'kind': 'rank_districts'}, headers={**h, 'X-Agent-Ticket': s['ticket']})
     assert finish_and_reply(client, settings, ref, 'Turun Rp 9.876.543.')['source'] == 'template'
     assert outbox_text(admin_conn, ref).startswith('*Peringkat kecamatan')
+
+
+def test_reply_goes_to_the_sending_number(app, client, settings, clone_db, mocks):
+    """A principal can hold several numbers (e.g. a test id registered later): the reply must go to the sender."""
+    import hashlib
+    import hmac
+    import json
+    import time
+    from telco_api.identity import IdentityVault
+    older, newer = '0099' + str(uuid.uuid4().int)[:8], '0099' + str(uuid.uuid4().int)[:8]
+    with psycopg.connect(clone_db['identity']) as c:
+        IdentityVault(settings).register(c, older, 'hos-west')
+        IdentityVault(settings).register(c, newer, 'hos-west')
+    mid = 'wamid.REPLYTO' + uuid.uuid4().hex[:12]
+    raw = json.dumps({'object': 'whatsapp_business_account', 'entry': [{'id': 'W', 'changes': [{'field': 'messages', 'value': {
+        'messaging_product': 'whatsapp', 'metadata': {'phone_number_id': '000000000000000'},
+        'messages': [{'from': older, 'id': mid, 'timestamp': str(int(time.time())), 'type': 'text', 'text': {'body': 'menu'}}]}}]}]},
+        separators=(',', ':')).encode()
+    sig = 'sha256=' + hmac.new(settings.wa_app_secret.get_secret_value().encode(), raw, hashlib.sha256).hexdigest()
+    client.post('/webhooks/whatsapp', content=raw, headers={'X-Hub-Signature-256': sig, 'Content-Type': 'application/json'})
+    h, ref = svc(settings), {'provider': 'whatsapp', 'message_id': mid}
+    for step in ('claim', 'intent', 'act', 'reply', 'complete'):
+        client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
+    client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
+    sent = [m for m in mocks.wa_sent if 'Perintah cepat' in m['text']['body'] and m['to'] in (older, newer)]
+    assert sent and sent[-1]['to'] == older

@@ -194,7 +194,8 @@ class Pipeline:
         eids = (self.narrate(provider, message_id).get('evidence_ids') if act.get('next') == 'narrate'
                 else [act['evidence_id']] if act.get('evidence_id') else act.get('evidence_ids') or [])
         oid = self.db.write(lambda conn: outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text',
-                                                        {'text': text, 'preview_url': False, 'evidence_ids': eids},
+                                                        {'text': text, 'preview_url': False, 'evidence_ids': eids,
+                                                         'reply_to': ev['identity_ref']},  # blind-index prefix of the sender
                                                         f'reply:{provider}:{message_id}', ev['correlation_id']))
         return self._save(provider, message_id, 'reply', {'outbox_id': oid})
 

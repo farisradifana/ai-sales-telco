@@ -151,7 +151,7 @@ def dispatch_batch(db, settings: Settings, wa: WhatsAppSender, n8n: N8nDispatche
             if row['kind'] == 'n8n_dispatch':
                 provider_id = n8n.send(row['payload'])
             else:
-                rec = db.write_identity(lambda conn: vault.recipient_for(conn, row['principal_id']))
+                rec = db.write_identity(lambda conn: vault.recipient_for(conn, row['principal_id'], (row['payload'] or {}).get('reply_to')))
                 if rec is None:
                     raise SendError('no active WhatsApp identity for principal', permanent=True)
                 provider_id = wa.send(rec[0], rec[1], row['payload'], row['idempotency_key'])

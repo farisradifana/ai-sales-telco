@@ -44,9 +44,12 @@ class IdentityVault:
                               WHERE wa_hmac=%s AND active RETURNING principal_id''', (h,)).fetchone()
         return (row[0] if row else None), h[:16]
 
-    def recipient_for(self, conn, principal_id: str) -> tuple[str, str] | None:
-        row = conn.execute('''SELECT wa_ciphertext,wa_hmac FROM telco_identity.wa_identity
-                              WHERE principal_id=%s AND active ORDER BY id DESC LIMIT 1''', (principal_id,)).fetchone()
+    def recipient_for(self, conn, principal_id: str, prefer_ref: str | None = None) -> tuple[str, str] | None:
+        """A reply goes to the number that sent the message (prefer_ref = its identity_ref); otherwise to the principal's most
+        recently active number. Never "the newest registration": a principal may hold several numbers."""
+        row = conn.execute('''SELECT wa_ciphertext,wa_hmac FROM telco_identity.wa_identity WHERE principal_id=%s AND active
+                              ORDER BY (%s::text IS NOT NULL AND left(wa_hmac,16)=%s::text) DESC, last_seen_at DESC NULLS LAST, id DESC
+                              LIMIT 1''', (principal_id, prefer_ref, prefer_ref)).fetchone()
         if not row:
             return None
         return self.decrypt(row[0]), row[1]
