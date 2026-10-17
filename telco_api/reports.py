@@ -441,8 +441,9 @@ def menu_rows(level: str | None, role: str) -> list[dict]:
 def menu_picker(db, p: Principal) -> tuple[str, dict]:
     """WhatsApp list message: tap a row instead of typing. Limits: 10 rows, title 24, description 72, button 20, body 1024."""
     prof = db.read(lambda conn: profile(conn, p))
-    body = ('📋 *Menu perintah cepat*\nPilih salah satu di bawah (tanpa AI, tidak memakai kuota).\n\n'
-            'Pertanyaan lain? Ketik saja dengan bahasa biasa, dijawab asisten AI.')
+    # The list header already shows "AI Sales Intelligence Telco" as the first line above this body.
+    body = ('📋 *Menu perintah cepat*\nPilih salah satu di bawah\n(tanpa AI, tidak memakai kuota).\n\n'
+            'Pertanyaan lain?\nKetik saja dengan bahasa biasa, dijawab asisten AI.')
     rows = [{k: v[:72] if k == 'description' else v[:24] if k == 'title' else v for k, v in r.items()} for r in menu_rows(prof['level'], p.role)]
     picker = {'type': 'list', 'header': {'type': 'text', 'text': 'AI Sales Intelligence Telco'}, 'body': {'text': body[:1024]},
               'footer': {'text': 'Ketik "menu" kapan saja'},
