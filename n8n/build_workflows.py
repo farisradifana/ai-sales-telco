@@ -47,9 +47,8 @@ AGENT_TOOLS = {
                  'kunjungan, saran. Butuh scope + entity_id dari resolve_entity.',
                  "scope: $fromAI('scope', 'outlet, district, regency, atau province', 'string'), "
                  "entity_id: $fromAI('entity_id', 'entity_id dari resolve_entity', 'number'), " + CHANNEL + ', ' + OPT_DATES),
-    'rank_districts': ('Peringkat kecamatan di wilayah akses pengguna berdasarkan perubahan omzet.', CHANNEL + ', ' + OPT_DATES),
-    'rank_regencies': ('Peringkat kabupaten/kota (yang seluruh kecamatannya dalam akses pengguna) berdasarkan perubahan omzet.',
-                       CHANNEL + ', ' + OPT_DATES),
+    # Rankings come from `report` (month vs previous months, what field users mean by "bulan lalu"); the equal-length
+    # rank_districts / rank_regencies tools stay available to the Hermes path only.
     'stock': ('Stok yang dipegang pengguna (account self) atau stok satu outlet (account outlet + outlet_id dari resolve_entity). '
               'PCS dan saldo IDR tidak dijumlahkan.',
               "account: $fromAI('account', 'self (stok saya) atau outlet', 'string', 'self'), "
@@ -93,7 +92,7 @@ def wf(wid, name, nodes, connections, active=False):
             'pinData': {}, 'tags': [], 'meta': {'templateCredsSetupCompleted': False, 'telcoGeneratedBy': 'n8n/build_workflows.py'}}
 
 
-def build(api: str, model_id: str = 'ai-sales') -> dict:
+def build(api: str, model_id: str = 'ai-sales', fallback_model_id: str = 'ai-sales-backup') -> dict:
     out = {}
     # 01: internal webhook from the API dispatcher (signature already verified at ingress). ACK immediately; in queue
     # mode the execution runs on a worker. Only provider+message_id travel; principal is resolved by the API.
@@ -158,7 +157,7 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
 
     out['02_sales_input'] = sub('telco02salesinput', 'TELCO 02 Sales input (draft/confirm)',
                                 [('Act', '/internal/v1/events/act'), ('Reply', '/internal/v1/events/reply'), ('Complete', '/internal/v1/events/complete')])
-    out['03_ai_agent'] = agent_workflow(api, model_id, sub_body)
+    out['03_ai_agent'] = agent_workflow(api, model_id, sub_body, fallback_model_id)
 
     def sched(wid, name, rule, label, path, body):
         ns = [{'id': 'schedule', 'name': 'Schedule', 'type': 'n8n-nodes-base.scheduleTrigger', 'typeVersion': 1.2, 'position': [0, 0],
@@ -242,7 +241,7 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
     return out
 
 
-def agent_workflow(api: str, model_id: str, ref_body: str) -> dict:
+def agent_workflow(api: str, model_id: str, ref_body: str, fallback_model_id: str = '') -> dict:
     """03: natural-language chat. API start (quota + one-turn ticket + system prompt) -> n8n AI Agent (9Router combo model,
     Postgres chat memory, ticket-bound HTTP tools) -> API finish (number verification, id scrub, chart link) -> reply."""
     finish_body = ("={{ JSON.stringify({ provider: $('Event').first().json.provider, message_id: $('Event').first().json.message_id, "
@@ -256,7 +255,7 @@ def agent_workflow(api: str, model_id: str, ref_body: str) -> dict:
                              'options': {}}},
              {'id': 'aiagent', 'name': 'AI Agent', 'type': LC + 'agent', 'typeVersion': 3.1, 'position': [660, -100],
               'onError': 'continueRegularOutput',  # model down -> finish(failed) -> safe reply + quota refund
-              'parameters': {'promptType': 'define', 'text': '={{ %s.question }}' % START,
+              'parameters': {'promptType': 'define', 'text': '={{ %s.question }}' % START, 'needsFallback': bool(fallback_model_id),
                              'options': {'systemMessage': '={{ %s.system_prompt }}' % START, 'maxIterations': 8}}},
              http('Agent finish', [1000, 0], '/internal/v1/agent/finish', api, body=finish_body),
              http('Reply', [1220, 0], '/internal/v1/events/reply', api, body=ref_body),
@@ -274,6 +273,13 @@ def agent_workflow(api: str, model_id: str, ref_body: str) -> dict:
              **chain(['AI Agent', 'Agent finish', 'Reply', 'Complete']),
              'Model combo (9Router)': {'ai_languageModel': [[{'node': 'AI Agent', 'type': 'ai_languageModel', 'index': 0}]]},
              'Memory (Postgres)': {'ai_memory': [[{'node': 'AI Agent', 'type': 'ai_memory', 'index': 0}]]}}
+    if fallback_model_id:  # AI Agent "Enable Fallback Model": second language-model input is used when the main one fails
+        nodes.insert(nodes.index(next(n for n in nodes if n['id'] == 'memory')),
+                     {'id': 'modelbackup', 'name': 'Model cadangan (9Router)', 'type': LC + 'lmChatOpenAi', 'typeVersion': 1.3,
+                      'position': [520, 220], 'credentials': CRED['router'],
+                      'parameters': {'model': {'__rl': True, 'mode': 'id', 'value': fallback_model_id}, 'responsesApiEnabled': False,
+                                     'options': {'temperature': 0.2, 'maxRetries': 1, 'timeout': 90000}}})
+        conns['Model cadangan (9Router)'] = {'ai_languageModel': [[{'node': 'AI Agent', 'type': 'ai_languageModel', 'index': 1}]]}
     for i, (name, (desc, body)) in enumerate(AGENT_TOOLS.items()):
         label = f'Tool {name}'
         nodes.append({'id': f'tool-{name}', 'name': label, 'type': 'n8n-nodes-base.httpRequestTool', 'typeVersion': 4.2,
@@ -388,12 +394,13 @@ def main():
     ap.add_argument('--sheets-cred-id', help='bind the Google Sheets OAuth2 credential created in the n8n UI (its id)')
     ap.add_argument('--enable', default='', help='comma list of normally-off lanes to enable in 00: target,recap,import')
     ap.add_argument('--model-id', default='ai-sales', help='9Router model or combo id used by the AI Agent (workflow 03)')
+    ap.add_argument('--fallback-model-id', default='ai-sales-backup', help="backup combo when the main model fails ('' = none)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if a.sheets_cred_id:
         CRED['sheets'] = {'googleSheetsOAuth2Api': {'id': a.sheets_cred_id, 'name': 'Google Sheets recap'}}
-    parts = build(a.api_base.rstrip('/'), a.model_id)
+    parts = build(a.api_base.rstrip('/'), a.model_id, a.fallback_model_id)
     parts['00_telco_all_in_one'] = build_combined(parts, frozenset(x for x in a.enable.split(',') if x))
     for name, w in parts.items():
         (out / f'{name}.json').write_bytes((json.dumps(w, indent=2, ensure_ascii=False) + '\n').encode('utf-8'))  # LF on every OS

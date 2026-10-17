@@ -77,8 +77,9 @@ Kalimat bebas (mis. "outlet mana yang sell in nya paling bagus?") → AI Agent, 
 | Agent start | `POST /internal/v1/agent/start`: cek & potong kuota harian, buat tiket satu-giliran (TTL 3 menit, maks 8 panggilan tool), system prompt sesuai jabatan |
 | AI Agent | Tools Agent; prompt = pesan pengguna, system message dari API, maks 8 iterasi; error model → lanjut ke finish (`failed`) |
 | Model combo (9Router) | OpenAI Chat Model, Responses API **off**, model `ai-sales` (combo 9Router) |
+| Model cadangan (9Router) | input fallback AI Agent (**Enable Fallback Model**): combo `ai-sales-backup`, dipakai otomatis bila model utama gagal (`--fallback-model-id`, kosong = tanpa cadangan) |
 | Memory (Postgres) | `agent_memory.chat_history`, session `wa:<principal_id>` (bukan nomor HP), 6 pesan terakhir, dihapus setelah 7 hari |
-| Tool resolve_entity / diagnose / rank_districts / rank_regencies / stock / target / report | HTTP Request Tool → `/internal/v1/agent-tools/<nama>`; tiket dikirim n8n di header `X-Agent-Ticket` (model tidak pernah melihatnya); error API dikembalikan ke model sebagai JSON |
+| Tool resolve_entity / diagnose / stock / target / report | HTTP Request Tool → `/internal/v1/agent-tools/<nama>`; tiket dikirim n8n di header `X-Agent-Ticket` (model tidak pernah melihatnya); error API dikembalikan ke model sebagai JSON |
 | Agent finish | `POST /internal/v1/agent/finish`: hapus ID teknis, ubah Markdown ke format WhatsApp, **setiap angka harus ada di hasil tool giliran ini** (kalau tidak → jawaban template dari data tool), tautan grafik untuk diagnosis |
 
 Kuota (tabel `telco.chat_quota_policy`, reset 00.00 WIB, 1 pesan = 1 kesempatan, retry n8n tidak dihitung dua kali):

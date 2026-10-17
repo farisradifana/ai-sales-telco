@@ -29,9 +29,14 @@ CARA KERJA:
 - Periode: isi keempat tanggal (baseline_start, baseline_end, current_start, current_end; YYYY-MM-DD, akhir EKSKLUSIF, panjang sama,
   tidak tumpang tindih) atau kosongkan semuanya. Kosong = bulan lengkap terakhir vs bulan sebelumnya (berdasarkan data lengkap).
 - Channel: sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet); default sell_out kecuali konteks jelas sell-in/target.
+- Peringkat, achievement/target bulanan, pertumbuhan "bulan lalu / 2-3 bulan lalu", per produk -> SELALU tool report (bulan data
+  lengkap terakhir vs bulan-bulan sebelumnya). diagnose hanya untuk "kenapa" (kontribusi produk/outlet); pembandingnya periode sama
+  panjang (bisa bukan bulan sebelumnya), jadi sebut nama bulan pembandingnya.
 - Cakupan Anda sudah dibatasi server; jika tool menolak (SCOPE_DENIED/NOT_FOUND), sampaikan dengan sopan bahwa wilayah itu di luar akses.
 ATURAN WAJIB:
-1. Semua angka HANYA dari hasil tool pada percakapan ini. Jangan mengulang angka dari ingatan percakapan lama tanpa memanggil tool lagi.
+1. Semua angka HANYA dari hasil tool pada percakapan ini, tulis apa adanya (jangan menjumlah/mengurangi/membagi sendiri; selisih dan
+   pertumbuhan sudah tersedia di hasil tool). Riwayat chat TIDAK dihitung sebagai data: setiap balasan yang memuat angka WAJIB
+   didahului panggilan tool pada giliran ini, walaupun pertanyaannya sama dengan sebelumnya (jawaban tanpa tool akan ditolak sistem).
 2. Jangan mengarang uplift, probabilitas, kompetitor, gangguan jaringan, atau sebab-akibat. Dekomposisi volume/harga = akuntansi, bukan sebab; kunjungan = asosiasi.
 3. Sebut periode, pembanding, dan channel. Jangan menulis ID teknis, nama field/kolom, atau JSON.
 4. Anda TIDAK bisa mencatat/mengubah transaksi. Untuk input sell-in arahkan ke format: "OUT-0001 SIM-NOVA-18 2" lalu balas "YA <kode>".
@@ -172,9 +177,12 @@ class ChatAgent:
     def _fallback(self, evs) -> str:
         if not evs:
             return ('Maaf, asisten AI sedang tidak bisa menjawab dengan angka yang terverifikasi. Kuota chat Anda tidak terpakai; '
-                    'coba lagi sebentar lagi, atau pakai perintah "stok saya", "target sell-in", "peringkat kecamatan".')
+                    'coba lagi sebentar lagi, atau ketik *menu* untuk perintah cepat tanpa AI.')
         render = {'stock': narrative.stock_text, 'target': narrative.target_text, 'rank_districts': narrative.ranking_text,
                   'rank_regencies': narrative.regency_ranking_text}
+        render.update({'report_sell_in': reports.sell_in_text, 'report_sell_out': reports.sell_out_text,
+                       'report_rank_outlets': reports.rank_outlets_text, 'report_rank_districts': reports.rank_area_text,
+                       'report_rank_regencies': reports.rank_area_text})
         tool, e = evs[-1]
         fn = narrative.diagnose_text if tool.startswith('diagnose') else render.get(tool)
         return fn(e) if fn else 'Maaf, jawaban AI tidak lolos verifikasi angka. Silakan ulangi pertanyaan dengan lebih spesifik.'

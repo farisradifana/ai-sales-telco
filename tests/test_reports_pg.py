@@ -110,3 +110,20 @@ def test_ai_report_tool_is_ticket_bound(client, settings, clone_db, org):
     assert r.status_code == 200 and r.json()['kind'] == 'district'
     r = client.post('/internal/v1/agent-tools/report', json={'kind': 'rank_regencies'}, headers={**h, 'X-Agent-Ticket': s['ticket']})
     assert r.status_code == 403 and r.json()['error']['code'] == 'LEVEL_DENIED'
+
+
+def test_ai_report_numbers_verified_or_template(client, settings, clone_db, org, admin_conn):
+    from tests.test_chat_agent_pg import finish_and_reply
+    h = svc(settings)
+    ref = send(client, settings, clone_db, org['hob'], 'kecamatan mana yang sell out nya paling turun? ' + uuid.uuid4().hex[:4])
+    s = client.post('/internal/v1/agent/start', json=ref, headers=h).json()
+    e = client.post('/internal/v1/agent-tools/report', json={'kind': 'rank_districts'}, headers={**h, 'X-Agent-Ticket': s['ticket']}).json()
+    worst = min(e['areas'], key=lambda a: Decimal(a['sell_out']['delta_idr'][0]))
+    from telco_api.money import rupiah
+    ok = f"Penurunan terbesar: {worst['name']}, sell-out turun {rupiah(worst['sell_out']['delta_idr'][0])} vs bulan lalu."
+    assert finish_and_reply(client, settings, ref, ok)['source'] == 'n8n_agent'  # stored delta can be quoted
+    ref = send(client, settings, clone_db, org['hob'], 'kecamatan mana yang sell out nya paling turun? ' + uuid.uuid4().hex[:4])
+    s = client.post('/internal/v1/agent/start', json=ref, headers=h).json()
+    client.post('/internal/v1/agent-tools/report', json={'kind': 'rank_districts'}, headers={**h, 'X-Agent-Ticket': s['ticket']})
+    assert finish_and_reply(client, settings, ref, 'Turun Rp 9.876.543.')['source'] == 'template'
+    assert outbox_text(admin_conn, ref).startswith('*Peringkat kecamatan')

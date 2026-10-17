@@ -141,8 +141,10 @@ def _metrics(series: dict, ws) -> dict:
     for ch in ('sell_in', 'sell_out'):
         s = series.get(ch, {})
         cur = s.get(0, Decimal(0))
-        out[ch] = {'revenue_idr': cur, 'history_idr': [s.get(w['k'], Decimal(0)) for w in ws[1:]],
-                   'growth': [_growth(cur, s.get(w['k'], Decimal(0))) for w in ws[1:]]}
+        hist = [s.get(w['k'], Decimal(0)) for w in ws[1:]]
+        # delta_idr is stored so a narrative may quote the change in rupiah (the verifier only accepts evidence numbers).
+        out[ch] = {'revenue_idr': cur, 'history_idr': hist, 'delta_idr': [cur - h for h in hist],
+                   'growth': [_growth(cur, h) for h in hist]}
     return out
 
 
@@ -162,6 +164,8 @@ def sell_in(db, p: Principal, corr: str, now: datetime | None = None) -> dict:
         prod = _by_product(conn, ws, outlets, sales, 'sell_in')
         products = [{'sku': s, 'product': n, 'stock_unit': u, 'quantity': prod.get(i, {}).get(0, (Decimal(0), Decimal(0)))[0],
                      'revenue_idr': prod.get(i, {}).get(0, (Decimal(0), Decimal(0)))[1],
+                     'previous_revenue_idr': prod.get(i, {}).get(1, (0, Decimal(0)))[1],
+                     'delta_idr': prod.get(i, {}).get(0, (0, Decimal(0)))[1] - prod.get(i, {}).get(1, (0, Decimal(0)))[1],
                      'growth': _growth(prod.get(i, {}).get(0, (0, Decimal(0)))[1], prod.get(i, {}).get(1, (0, Decimal(0)))[1])}
                     for i, s, n, u in _products(conn)]
         actual = sum((x['revenue_idr'] for x in products), Decimal(0))
@@ -187,7 +191,8 @@ def sell_in(db, p: Principal, corr: str, now: datetime | None = None) -> dict:
                 lo, hi = _bounds([cur])
                 ca = dec(conn.execute('''SELECT coalesce(sum(net_revenue),0) FROM telco.v_commercial_event WHERE channel='sell_in'
                     AND sales_id=ANY(%s) AND occurred_at>=%s AND occurred_at<%s''', (ss, lo, hi)).fetchone()[0])
-                children.append({'title': title, 'target_idr': ct, 'actual_idr': ca, 'achievement': (ca / ct).quantize(Decimal('0.0001'))})
+                children.append({'title': title, 'target_idr': ct, 'actual_idr': ca, 'gap_idr': max(Decimal(0), ct - ca),
+                                 'achievement': (ca / ct).quantize(Decimal('0.0001'))})
             children.sort(key=lambda c: c['achievement'])
         return prof, ws, sales, tgt, products, actual, prev, t_today, a_today, children
 
@@ -195,7 +200,8 @@ def sell_in(db, p: Principal, corr: str, now: datetime | None = None) -> dict:
     payload = {'scope_title': prof['title'], 'level': prof['level'], 'channel': 'sell_in', **_periods_payload(ws),
                'sales_count': len(sales), 'target_idr': tgt, 'actual_idr': actual,
                'achievement': (actual / tgt).quantize(Decimal('0.0001')) if tgt else None, 'gap_idr': max(Decimal(0), tgt - actual),
-               'previous_month_idr': prev, 'growth_vs_previous': _growth(actual, prev), 'products': products,
+               'previous_month_idr': prev, 'delta_vs_previous_idr': actual - prev, 'growth_vs_previous': _growth(actual, prev),
+               'products': products,
                'today': {'date': str(today), 'target_idr': t_today, 'actual_idr': a_today}, 'children': children}
     return _store(db, p, 'report_sell_in', {'period': payload['current']}, payload, corr)
 
@@ -212,14 +218,16 @@ def sell_out(db, p: Principal, corr: str) -> dict:
         for i, s, n, u in _products(conn):
             c, o = prod.get(i, {}).get(0, (Decimal(0), Decimal(0))), prod.get(i, {}).get(1, (Decimal(0), Decimal(0)))
             products.append({'sku': s, 'product': n, 'stock_unit': u, 'quantity': c[0], 'revenue_idr': c[1],
-                             'previous_quantity': o[0], 'previous_revenue_idr': o[1], 'growth': _growth(c[1], o[1])})
+                             'previous_quantity': o[0], 'previous_revenue_idr': o[1], 'delta_idr': c[1] - o[1],
+                             'growth': _growth(c[1], o[1])})
         return prof, ws, outlets, products
 
     prof, ws, outlets, products = db.read(q)
     total = sum((x['revenue_idr'] for x in products), Decimal(0))
     prev = sum((x['previous_revenue_idr'] for x in products), Decimal(0))
     payload = {'scope_title': prof['title'], 'level': prof['level'], 'channel': 'sell_out', **_periods_payload(ws),
-               'outlet_count': len(outlets), 'revenue_idr': total, 'previous_month_idr': prev, 'growth_vs_previous': _growth(total, prev),
+               'outlet_count': len(outlets), 'revenue_idr': total, 'previous_month_idr': prev, 'delta_vs_previous_idr': total - prev,
+               'growth_vs_previous': _growth(total, prev),
                'products': products}
     return _store(db, p, 'report_sell_out', {'period': payload['current']}, payload, corr)
 

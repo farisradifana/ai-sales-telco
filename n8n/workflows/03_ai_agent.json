@@ -92,6 +92,7 @@
       "parameters": {
         "promptType": "define",
         "text": "={{ $('Agent start').item.json.question }}",
+        "needsFallback": true,
         "options": {
           "systemMessage": "={{ $('Agent start').item.json.system_prompt }}",
           "maxIterations": 8
@@ -221,6 +222,35 @@
       }
     },
     {
+      "id": "modelbackup",
+      "name": "Model cadangan (9Router)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        520,
+        220
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "telcoRouterOpenAi",
+          "name": "9Router (OpenAI-compatible)"
+        }
+      },
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "ai-sales-backup"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "temperature": 0.2,
+          "maxRetries": 1,
+          "timeout": 90000
+        }
+      }
+    },
+    {
       "id": "memory",
       "name": "Memory (Postgres)",
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
@@ -331,100 +361,12 @@
       }
     },
     {
-      "id": "tool-rank_districts",
-      "name": "Tool rank_districts",
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.2,
-      "position": [
-        1040,
-        220
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "telcoApiService",
-          "name": "TELCO API service token"
-        }
-      },
-      "parameters": {
-        "toolDescription": "Peringkat kecamatan di wilayah akses pengguna berdasarkan perubahan omzet.",
-        "descriptionType": "manual",
-        "method": "POST",
-        "url": "http://api:8000/internal/v1/agent-tools/rank_districts",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Agent-Ticket",
-              "value": "={{ $('Agent start').item.json.ticket }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ channel: $fromAI('channel', 'sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet)', 'string', 'sell_out'), baseline_start: $fromAI('baseline_start', 'Opsional. Awal periode pembanding YYYY-MM-DD', 'string', '') || null, baseline_end: $fromAI('baseline_end', 'Opsional. Akhir periode pembanding (eksklusif)', 'string', '') || null, current_start: $fromAI('current_start', 'Opsional. Awal periode yang dianalisis YYYY-MM-DD', 'string', '') || null, current_end: $fromAI('current_end', 'Opsional. Akhir periode dianalisis (eksklusif)', 'string', '') || null }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          },
-          "timeout": 60000
-        }
-      }
-    },
-    {
-      "id": "tool-rank_regencies",
-      "name": "Tool rank_regencies",
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.2,
-      "position": [
-        1180,
-        220
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "telcoApiService",
-          "name": "TELCO API service token"
-        }
-      },
-      "parameters": {
-        "toolDescription": "Peringkat kabupaten/kota (yang seluruh kecamatannya dalam akses pengguna) berdasarkan perubahan omzet.",
-        "descriptionType": "manual",
-        "method": "POST",
-        "url": "http://api:8000/internal/v1/agent-tools/rank_regencies",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Agent-Ticket",
-              "value": "={{ $('Agent start').item.json.ticket }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ channel: $fromAI('channel', 'sell_out (outlet ke pelanggan) atau sell_in (sales ke outlet)', 'string', 'sell_out'), baseline_start: $fromAI('baseline_start', 'Opsional. Awal periode pembanding YYYY-MM-DD', 'string', '') || null, baseline_end: $fromAI('baseline_end', 'Opsional. Akhir periode pembanding (eksklusif)', 'string', '') || null, current_start: $fromAI('current_start', 'Opsional. Awal periode yang dianalisis YYYY-MM-DD', 'string', '') || null, current_end: $fromAI('current_end', 'Opsional. Akhir periode dianalisis (eksklusif)', 'string', '') || null }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          },
-          "timeout": 60000
-        }
-      }
-    },
-    {
       "id": "tool-stock",
       "name": "Tool stock",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1320,
+        1040,
         220
       ],
       "credentials": {
@@ -468,7 +410,7 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1460,
+        1180,
         220
       ],
       "credentials": {
@@ -512,7 +454,7 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1600,
+        1320,
         220
       ],
       "credentials": {
@@ -647,6 +589,17 @@
         ]
       ]
     },
+    "Model cadangan (9Router)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
     "Tool resolve_entity": {
       "ai_tool": [
         [
@@ -659,28 +612,6 @@
       ]
     },
     "Tool diagnose": {
-      "ai_tool": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tool rank_districts": {
-      "ai_tool": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tool rank_regencies": {
       "ai_tool": [
         [
           {
