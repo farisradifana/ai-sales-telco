@@ -176,6 +176,9 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
     recap_nodes = [
         {'id': 'schedule', 'name': 'Schedule', 'type': 'n8n-nodes-base.scheduleTrigger', 'typeVersion': 1.2, 'position': [0, 0],
          'parameters': {'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 30 6 * * *'}]}}},
+        # Manual start: "Execute workflow" in the editor, or `n8n execute --id=telco07recap000001` from the CLI.
+        {'id': 'manual', 'name': 'Jalankan sekarang', 'type': 'n8n-nodes-base.manualTrigger', 'typeVersion': 1, 'position': [0, 160],
+         'parameters': {}},
         {'id': 'params', 'name': 'Recap params', 'type': 'n8n-nodes-base.set', 'typeVersion': 3.4, 'position': [220, 0],
          'parameters': {'mode': 'manual', 'includeOtherFields': False, 'assignments': {'assignments': [
              {'id': 's', 'name': 'scope', 'type': 'string', 'value': 'province'},
@@ -219,8 +222,9 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
                         'options': {}}},
     ]
     out['07_spreadsheet_recap'] = wf('telco07recap000001', 'TELCO 07 Spreadsheet recap (export snapshot)', recap_nodes,
-                                     chain(['Schedule', 'Recap params', 'Export CSV', 'Clear Rekap tab', 'Clear Info tab', 'Data rows',
-                                            'Write Rekap tab', 'Info rows', 'Write Info tab']))
+                                     {**chain(['Schedule', 'Recap params', 'Export CSV', 'Clear Rekap tab', 'Clear Info tab', 'Data rows',
+                                               'Write Rekap tab', 'Info rows', 'Write Info tab']),
+                                      'Jalankan sekarang': {'main': [[{'node': 'Recap params', 'type': 'main', 'index': 0}]]}})
 
     # 08: admin uploads a recap CSV -> API staging (hash, validation, preview). Posting needs admin confirm in dashboard.
     imp_nodes = [

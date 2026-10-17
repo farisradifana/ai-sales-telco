@@ -24,6 +24,17 @@
       }
     },
     {
+      "id": "manual",
+      "name": "Jalankan sekarang",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {}
+    },
+    {
       "id": "params",
       "name": "Recap params",
       "type": "n8n-nodes-base.set",
@@ -391,6 +402,17 @@
         [
           {
             "node": "Write Info tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jalankan sekarang": {
+      "main": [
+        [
+          {
+            "node": "Recap params",
             "type": "main",
             "index": 0
           }

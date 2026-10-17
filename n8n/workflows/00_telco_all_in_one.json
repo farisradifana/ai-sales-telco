@@ -1142,11 +1142,22 @@
     },
     {
       "id": "recap-1",
+      "name": "Rekap · Jalankan sekarang",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        300,
+        1930
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "recap-2",
       "name": "Rekap · Recap params",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        300,
+        520,
         1930
       ],
       "parameters": {
@@ -1190,12 +1201,12 @@
       }
     },
     {
-      "id": "recap-2",
+      "id": "recap-3",
       "name": "Rekap · Export CSV",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        520,
+        740,
         1930
       ],
       "credentials": {
@@ -1250,12 +1261,12 @@
       "waitBetweenTries": 3000
     },
     {
-      "id": "recap-3",
+      "id": "recap-4",
       "name": "Rekap · Clear Rekap tab",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        740,
+        960,
         1930
       ],
       "credentials": {
@@ -1284,12 +1295,12 @@
       }
     },
     {
-      "id": "recap-4",
+      "id": "recap-5",
       "name": "Rekap · Clear Info tab",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        960,
+        1180,
         1930
       ],
       "credentials": {
@@ -1318,12 +1329,12 @@
       }
     },
     {
-      "id": "recap-5",
+      "id": "recap-6",
       "name": "Rekap · Data rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1180,
+        1400,
         1930
       ],
       "parameters": {
@@ -1333,12 +1344,12 @@
       }
     },
     {
-      "id": "recap-6",
+      "id": "recap-7",
       "name": "Rekap · Write Rekap tab",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1400,
+        1620,
         1930
       ],
       "credentials": {
@@ -1371,12 +1382,12 @@
       }
     },
     {
-      "id": "recap-7",
+      "id": "recap-8",
       "name": "Rekap · Info rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1620,
+        1840,
         1930
       ],
       "executeOnce": true,
@@ -1387,12 +1398,12 @@
       }
     },
     {
-      "id": "recap-8",
+      "id": "recap-9",
       "name": "Rekap · Write Info tab",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1840,
+        2060,
         1930
       ],
       "credentials": {
@@ -1436,7 +1447,7 @@
       "parameters": {
         "content": "## 07 · Rekap Google Sheet (NONAKTIF)\nExport snapshot ter-scope → tab Rekap (tabel data) + tab Info (watermark, channel, satuan, total). Aktifkan setelah credential Google di-bind.",
         "color": 4,
-        "width": 2100,
+        "width": 2320,
         "height": 240
       }
     },
@@ -1922,6 +1933,17 @@
         [
           {
             "node": "Rekap · Write Info tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap · Jalankan sekarang": {
+      "main": [
+        [
+          {
+            "node": "Rekap · Recap params",
             "type": "main",
             "index": 0
           }
