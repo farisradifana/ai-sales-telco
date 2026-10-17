@@ -57,7 +57,32 @@ python scripts/edge_local.py --port 8089
 Tunnel mencetak URL `https://<acak>.trycloudflare.com`. Di Meta: WhatsApp → Configuration → Callback URL
 `https://<acak>.trycloudflare.com/webhooks/whatsapp`, Verify token = isi `WA_VERIFY_TOKEN` → *Verify and save* → subscribe field
 **messages**. Set juga `PUBLIC_BASE_URL=https://<acak>.trycloudflare.com` agar tautan chart dapat dibuka penerima.
-URL quick tunnel **berubah setiap restart**; untuk URL tetap gunakan named tunnel (akun Cloudflare + domain) atau deploy cloud.
+URL quick tunnel **berubah setiap restart** dan bisa mati sendiri ("Tunnel not found"); untuk URL tetap gunakan named tunnel.
+
+### C2. Named tunnel (URL tetap)
+
+Syarat: domain aktif di Cloudflare (nameserver Cloudflare sudah tercatat di registry; record lama disalin sebagai *DNS only*).
+
+```bash
+cloudflared tunnel login                      # pilih zone, Authorize -> ~/.cloudflared/cert.pem
+cloudflared tunnel create telco-wa            # kredensial ~/.cloudflared/<uuid>.json (rahasia, di luar repo)
+cloudflared tunnel route dns telco-wa telco-wa.<domain>
+```
+
+Config `.local/cloudflared/telco-wa.yml` (di luar git):
+
+```yaml
+tunnel: <uuid>
+credentials-file: C:\Users\<user>\.cloudflared\<uuid>.json
+ingress:
+  - hostname: telco-wa.<domain>
+    service: http://127.0.0.1:8089   # edge lokal: hanya /webhooks/whatsapp dan /charts/*
+  - service: http_status:404
+```
+
+Jalankan `cloudflared tunnel --config .local/cloudflared/telco-wa.yml run telco-wa`, set
+`PUBLIC_BASE_URL=https://telco-wa.<domain>`, lalu Callback URL Meta `https://telco-wa.<domain>/webhooks/whatsapp` (cukup sekali).
+Instalasi PC ini: tunnel `telco-wa`, hostname `telco-wa.farisradifana.my.id`.
 
 n8n (workflow 01–04, 06) dan Hermes harus berjalan seperti E2E lokal (`docs/RUNBOOK.md` bagian 7).
 
