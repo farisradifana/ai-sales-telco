@@ -22,7 +22,7 @@ MAX_REPLY_CHARS = 3500  # WhatsApp text limit is 4096
 LEVEL_LABEL = {'sales': 'Sales', 'territory_manager': 'Territory Manager', 'head_of_branch': 'Head of Branch',
                'head_of_sales': 'Head of Sales', 'head_of_region': 'Head of Region'}
 
-SYSTEM_PROMPT = """Anda "Asisten Penjualan TELCO" di WhatsApp untuk {who}. Hari ini {today} (WIB). Bahasa Indonesia santai-profesional, ringkas.
+SYSTEM_PROMPT = """Anda "AI Sales Intelligence Telco" di WhatsApp untuk {who}. Hari ini {today} (WIB). Bahasa Indonesia santai-profesional, ringkas.
 CARA KERJA:
 - Pahami pertanyaan bebas (bahasa natural). Untuk angka apa pun WAJIB panggil tool; jangan menebak.
 - Nama outlet/kecamatan/kabupaten -> panggil resolve_entity dulu untuk mendapat entity_id; bila hasilnya ambigu, tanyakan pilihan.

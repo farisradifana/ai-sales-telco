@@ -184,7 +184,7 @@ def test_halo_sends_a_picker_and_a_tap_runs_the_command(app, client, settings, c
     used = quota_status(db, org['tm'])['used']
     _post(client, settings, num, {'type': 'text', 'text': {'body': 'Halo'}})
     hello = [m for m in mocks.wa_sent if m['to'] == num][-1]
-    assert hello['type'] == 'interactive' and hello['interactive']['type'] == 'button' and 'Halo, Territory Manager' in hello['interactive']['body']['text']
+    assert hello['type'] == 'interactive' and hello['interactive']['type'] == 'button' and 'Halo, Territory Manager' in hello['interactive']['body']['text'] and 'AI Sales Intelligence Telco' in hello['interactive']['body']['text']
     assert hello['interactive']['action']['buttons'] == [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]
     _post(client, settings, num, {'type': 'interactive', 'interactive': {'type': 'button_reply', 'button_reply': {'id': 'menu', 'title': 'Menu'}}})
     msg = [m for m in mocks.wa_sent if m['to'] == num][-1]

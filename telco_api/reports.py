@@ -444,7 +444,7 @@ def menu_picker(db, p: Principal) -> tuple[str, dict]:
     body = ('📋 *Menu perintah cepat*\nPilih salah satu di bawah (tanpa AI, tidak memakai kuota).\n\n'
             'Pertanyaan lain? Ketik saja dengan bahasa biasa, dijawab asisten AI.')
     rows = [{k: v[:72] if k == 'description' else v[:24] if k == 'title' else v for k, v in r.items()} for r in menu_rows(prof['level'], p.role)]
-    picker = {'type': 'list', 'header': {'type': 'text', 'text': 'Asisten Penjualan TELCO'}, 'body': {'text': body[:1024]},
+    picker = {'type': 'list', 'header': {'type': 'text', 'text': 'AI Sales Intelligence Telco'}, 'body': {'text': body[:1024]},
               'footer': {'text': 'Ketik "menu" kapan saja'},
               'action': {'button': 'Pilih perintah', 'sections': [{'title': 'Perintah cepat', 'rows': rows[:10]}]}}
     return body, picker
@@ -453,7 +453,7 @@ def menu_picker(db, p: Principal) -> tuple[str, dict]:
 def greeting(db, p: Principal) -> tuple[str, dict]:
     """Reply to "Halo": a short greeting with one "Menu" button (tapping it sends the id "menu" -> the list picker)."""
     prof = db.read(lambda conn: profile(conn, p))
-    body = (f"Halo, {prof['title']}! 👋\nSelamat datang di Asisten Penjualan TELCO.\n\n"
+    body = (f"Halo, {prof['title']}! 👋\nSelamat datang di AI Sales Intelligence Telco.\n\n"
             'Tekan *Menu* untuk melihat perintah cepat, atau langsung ketik pertanyaan Anda.')
     button = {'type': 'button', 'body': {'text': body[:1024]},
               'action': {'buttons': [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]}}
