@@ -53,7 +53,7 @@
               "id": "c",
               "name": "channel",
               "type": "string",
-              "value": "sell_out"
+              "value": "sell_in"
             },
             {
               "id": "a",

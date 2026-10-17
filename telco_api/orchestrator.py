@@ -3,7 +3,7 @@ n8n sends only (provider, message_id). The principal is read from the verified i
 idempotent: its result is cached on the event so n8n retries / worker crashes never repeat side effects."""
 from psycopg.types.json import Jsonb
 
-from . import analytics, charts, context, errors, intents, narrative, outbox, transactions
+from . import analytics, charts, context, errors, intents, narrative, outbox, reports, transactions
 from .agent import Narrator
 from .schemas import DiagnoseRequest, DraftRequest, RankRequest, ResolveRequest, SaleLine, StockRequest, TargetRequest
 from .security import load_principal
@@ -84,6 +84,18 @@ class Pipeline:
         name, slots = it['name'], it['slots']
         if it.get('clarification'):
             return {'next': 'reply', 'text': it['clarification'], 'intent': name}
+        if name in QUICK:  # fixed-format reports: no model, no quota
+            if name == 'cmd_menu':
+                return {'next': 'reply', 'intent': name, 'text': reports.menu_text(self.db, p)}
+            if name == 'cmd_stock':
+                if p.sales_id is None:
+                    return {'next': 'reply', 'intent': name, 'text': 'Stok hanya dipegang akun sales. Ketik *sell in* atau *sell out* '
+                            'untuk laporan wilayah Anda.'}
+                e = analytics.stock(self.db, p, StockRequest(account='self'), corr)
+                return {'next': 'reply', 'intent': name, 'text': narrative.stock_text(e), 'evidence_id': e['evidence_id']}
+            fn, render = QUICK[name]
+            e = fn(self.db, p, corr)
+            return {'next': 'reply', 'intent': name, 'text': render(e), 'evidence_id': e['evidence_id']}
         if name == 'sales_input':
             req = DraftRequest(channel=slots['channel'], outlet_code=slots['outlet_code'],
                                lines=[SaleLine(sku=x['sku'], quantity=x['quantity']) for x in slots['lines']])
@@ -211,9 +223,18 @@ class Pipeline:
         return {'status': 'completed', 'outbox_id': r['outbox_id'], 'out_of_order': c.get('out_of_order')}
 
 
+QUICK = {'cmd_menu': None, 'cmd_stock': None,
+         'cmd_sell_in': (reports.sell_in, reports.sell_in_text), 'cmd_sell_out': (reports.sell_out, reports.sell_out_text),
+         'cmd_rank_outlets': (reports.rank_outlets, reports.rank_outlets_text),
+         'cmd_rank_districts': (reports.rank_districts, reports.rank_area_text),
+         'cmd_rank_regencies': (reports.rank_regencies, reports.rank_area_text)}
+
+
 def _user_error(exc: errors.AppError) -> str:
     if exc.code == 'INSUFFICIENT_STOCK':
         return exc.message + ' Tidak ada yang diposting; periksa stok lalu kirim ulang.'
     if exc.code == 'SCOPE_DENIED':
         return 'Cakupan tersebut tidak diizinkan untuk akun Anda.'
+    if exc.code in ('LEVEL_DENIED', 'ACCOUNT_REQUIRED'):
+        return exc.message + ' Ketik *menu* untuk melihat perintah yang tersedia.'
     return f'{exc.message} (kode {exc.code})'

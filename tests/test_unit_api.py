@@ -100,7 +100,11 @@ def test_waterfall_reconciles_to_delta():
     ('SELLIN OUT-0001 SIM-NOVA-8 5, BAL-NOVA-IDR 100000', 'sales_input'),
     ('YA 1A2B3C', 'confirm'), ('batal abcdef', 'cancel'),
     ('kenapa omzet OUT-0001 turun?', 'insight'), ('apa yang harus dilakukan?', 'follow_up'),
-    ('solusinya?', 'follow_up'), ('stok saya', 'stock'), ('target sell-in hari ini', 'target'),
+    ('solusinya?', 'follow_up'), ('stok saya', 'cmd_stock'), ('target sell-in hari ini', 'target'),
+    ('Sell in', 'cmd_sell_in'), ('sell-out', 'cmd_sell_out'), ('peringkat outlet', 'cmd_rank_outlets'),
+    ('Peringkat kecamatan?', 'cmd_rank_districts'), ('peringkat kabupaten', 'cmd_rank_regencies'), ('menu', 'cmd_menu'),
+    ('OUT-0001 SIM-NOVA-8 5', 'sales_input'), ('outlet mana yang stock nya paling rendah?', 'stock'),
+    ('outlet mana yang sell in nya paling bagus?', 'help'),
     ('STOP TARGET', 'target_opt_out'), ('kecamatan mana yang turun?', 'rank_districts'),
     ('kabupaten mana yang turun?', 'rank_regencies'), ('peringkat kab/kota sell-in', 'rank_regencies'),
     ('kenapa omzet kabupaten madiun turun?', 'insight'),
@@ -109,9 +113,15 @@ def test_intents(text, name):
     assert intents.parse(text).name == name
 
 
-def test_sales_input_needs_outlet_or_channel():
-    assert intents.parse('SELLIN SIM-NOVA-8 5').clarification
-    assert intents.parse('catat SIM-NOVA-8 5 OUT-0001').clarification  # channel missing
+def test_sales_input_is_always_sell_in():
+    assert intents.parse('SELLIN SIM-NOVA-8 5').clarification  # outlet missing
+    it = intents.parse('out-0001 sim-nova-8 5, VCR-NOVA-3 x2')
+    assert it.slots == {'channel': 'sell_in', 'outlet_code': 'OUT-0001',
+                        'lines': [{'sku': 'SIM-NOVA-8', 'quantity': 5}, {'sku': 'VCR-NOVA-3', 'quantity': 2}]}
+    assert intents.parse('OUT-0001 SIM-NOVA-8').slots['lines'] == [{'sku': 'SIM-NOVA-8', 'quantity': 1}]
+    assert intents.parse('catat SIM-NOVA-8 5 OUT-0001').slots['channel'] == 'sell_in'
+    for t in ('SELLOUT OUT-0001 SIM-NOVA-8 5', 'catat sellout OUT-0001 SIM-NOVA-8 2'):
+        assert 'hanya untuk sell-in' in intents.parse(t).clarification
 
 
 def test_area_insight_slots():
@@ -127,7 +137,7 @@ def test_injection_text_is_just_text():
 
 def test_agent_tool_allowlist_has_no_write_or_sql():
     names = set(agent_tools.TOOLS)
-    assert names == {'get_evidence', 'diagnose', 'rank_districts', 'rank_regencies', 'stock', 'target', 'resolve_entity'}
+    assert names == {'get_evidence', 'diagnose', 'rank_districts', 'rank_regencies', 'stock', 'target', 'resolve_entity', 'report'}
     for n in names:
         assert agent_tools.input_schema(n)['additionalProperties'] is False
 
@@ -186,6 +196,14 @@ def test_scrub_ids_removes_technical_ids():
     from telco_api.agent import scrub_ids
     out = scrub_ids('Turun -Rp5.173.100.\nEvidence ID 11111111-2222-3333-4444-555555555555.\nSaran: kunjungi outlet.')
     assert '1111' not in out and 'Evidence' not in out and '-Rp5.173.100' in out and 'Saran' in out
+
+
+def test_chart_is_readable_and_traceable():
+    from telco_api.charts import render_waterfall, short_rp
+    svg = render_waterfall(EVID)
+    assert 'Turun Rp5,2 jt' in svg and 'Juni 2026 (pembanding)' in svg and 'September 2026 (sekarang)' in svg
+    assert '-Rp5.173.100' in svg and 'Rp7.332.900' in svg  # exact values kept in tooltips
+    assert (short_rp('2159800'), short_rp('-990000'), short_rp('1250000000'), short_rp('500')) == ('Rp2,2 jt', '-Rp990 rb', 'Rp1,3 M', 'Rp500')
 
 
 def test_agent_reply_uses_whatsapp_markup():

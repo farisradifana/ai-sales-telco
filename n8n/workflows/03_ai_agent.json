@@ -463,12 +463,56 @@
       }
     },
     {
+      "id": "tool-report",
+      "name": "Tool report",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Laporan baku (bulan data lengkap terakhir, cakupan pengguna): sell_in = target/realisasi/achievement/per produk/progres tim; sell_out = per produk; rank_outlets; rank_districts (TM ke atas); rank_regencies (HoS/HoR). Pertumbuhan vs 1/2/3 bulan lalu.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/report",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: $fromAI('kind', 'sell_in, sell_out, rank_outlets, rank_districts, atau rank_regencies', 'string') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
       "id": "tool-target",
       "name": "Tool target",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1460,
+        1600,
         220
       ],
       "credentials": {
@@ -648,6 +692,17 @@
       ]
     },
     "Tool stock": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool report": {
       "ai_tool": [
         [
           {

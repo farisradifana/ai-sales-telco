@@ -88,7 +88,6 @@ def stock_text(e: dict) -> str:
         unit = 'pcs' if i['stock_unit'] == 'PCS' else 'IDR saldo'
         qs = f"{int(q):,}".replace(',', '.') if q == q.to_integral() else str(q)
         out.append(f"- {i['sku']}: {qs} {unit}")
-    out.append('Satuan PCS dan saldo IDR tidak dijumlahkan.')
     return '\n'.join(out)
 
 

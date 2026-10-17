@@ -95,11 +95,9 @@ def test_sales_gets_three_chats_then_deterministic_answer(client, settings, clon
     assert s['next'] == 'reply' and 'ticket' not in s
     client.post('/internal/v1/events/reply', json=ref, headers=h)
     text = outbox_text(admin_conn, ref)
-    assert 'Kuota chat AI Anda hari ini sudah habis (3 dari 3)' in text and 'Stok yang Anda pegang' in text
-    ref = send(client, settings, clone_db, p, 'tolong ceritakan strategi minggu depan')
-    client.post('/internal/v1/agent/start', json=ref, headers=h)
-    client.post('/internal/v1/events/reply', json=ref, headers=h)
-    assert 'Perintah tanpa AI tetap bisa dipakai' in outbox_text(admin_conn, ref)
+    # Quota used up: no model call, the reply lists the quick commands that stay free.
+    assert 'Kuota chat AI Anda hari ini sudah habis (3 dari 3)' in text and '*stok saya*' in text and '*sell in*' in text
+    assert 'peringkat kecamatan' not in text  # sales level: no area rankings
 
 
 def test_admin_without_position_has_no_ai_chat(client, settings, clone_db, people, admin_conn):

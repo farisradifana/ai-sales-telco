@@ -80,6 +80,12 @@ def target(ticket: str, channel: str, target_date: str | None = None, sales_id: 
     return _call('target', ticket, {'channel': channel, 'target_date': target_date, 'sales_id': sales_id})
 
 
+@mcp.tool(name='report', description='Laporan baku: sell_in, sell_out, rank_outlets, rank_districts, rank_regencies.',
+          annotations=READ_ONLY)
+def report(ticket: str, kind: str) -> str:
+    return _call('report', ticket, {'kind': kind})
+
+
 @mcp.tool(name='resolve_entity', description='Cari outlet/kecamatan/kab-kota/provinsi dalam cakupan izin.', annotations=READ_ONLY)
 def resolve_entity(ticket: str, query: str, scope: str | None = None) -> str:
     return _call('resolve_entity', ticket, {'query': query, 'scope': scope})

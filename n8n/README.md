@@ -11,7 +11,7 @@ diinterpolasi ke query (n8n hanya mengirim `provider` + `message_id` ke API).
 | 03_ai_agent | **AI Agent n8n** untuk pertanyaan bahasa natural: Agent start (kuota + tiket) → AI Agent (model combo 9Router, Postgres Chat Memory, 6 HTTP tool) → Agent finish (verifikasi angka) → reply → complete |
 | 05_daily_target | Cron WIB 07–20 Senin–Sabtu → `/internal/v1/targets/nudges` (opt-in, jam, hari kerja, idempotent per hari) |
 | 06_outbox_dispatcher | Tiap 20 detik → `/internal/v1/outbox/dispatch` (SKIP LOCKED, lease, retry+jitter, dead-letter) |
-| 07_spreadsheet_recap | 06:30 WIB → export CSV ter-scope → Google Sheet `1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg` tab `Rekap` |
+| 07_spreadsheet_recap | 06:30 WIB → export CSV **sell-in** ter-scope (Provinsi Jawa Timur, 30 hari) → Google Sheet `1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg` tab `Rekap` + `Info` |
 | 08_import_staging | Upload CSV admin → `/v1/imports` (hash, validasi, preview). Posting hanya setelah konfirmasi admin |
 
 Validasi signature WhatsApp (raw body HMAC), dedup dan penolakan signature invalid terjadi di **ingress API**
@@ -53,8 +53,23 @@ Smoke test import yang dijalankan (n8n 2.35.7, SQLite terisolasi): `Successfully
 
 ## AI Agent (workflow 03) dan kuota chat
 
-Router mengirim ke AI Agent **semua pesan selain** input penjualan + `YA/BATAL <kode>` + `MULAI/STOP TARGET` (ketiganya tetap
-deterministik, tanpa model, tanpa kuota).
+Router mengirim ke AI Agent **semua pesan selain** perintah cepat berikut (deterministik, tanpa model, tanpa kuota):
+
+| Ketik | Isi balasan | Jabatan |
+|---|---|---|
+| `menu` | daftar perintah sesuai jabatan | semua |
+| `stok saya` | stok per produk yang dipegang | Sales |
+| `OUT-0001 SIM-NOVA-8 5` (beberapa produk dipisah koma; jumlah kosong = 1) | draft **sell-in** → balas `YA <kode>` / `BATAL <kode>` | Sales |
+| `sell in` | target, realisasi, achievement, per produk, vs bulan lalu, progres tim (bawahan langsung, terendah dulu), progres hari ini | semua |
+| `sell out` | sell-out per produk (pcs, omzet, pertumbuhan) | semua |
+| `peringkat outlet` | top 5 sell-out & sell-in (+3 terbawah bila >10 outlet) | semua |
+| `peringkat kecamatan` | SO & SI + pertumbuhan vs 1/2/3 bulan lalu; top 10 + 5 terbawah | TM, HoB, HoS, HoR |
+| `peringkat kabupaten` | sama, per kabupaten/kota | HoS, HoR |
+| `MULAI/STOP TARGET` | pengingat target harian | semua |
+
+Periode laporan = bulan data lengkap terakhir (watermark); bulan penuh bila watermark di akhir bulan, selain itu month-to-date
+dengan pembanding rentang hari yang sama. Input lewat WhatsApp selalu **sell-in**; `SELLOUT …` ditolak dengan petunjuk.
+Kalimat bebas (mis. "outlet mana yang sell in nya paling bagus?") → AI Agent, yang juga punya tool `report` dengan laporan yang sama.
 
 | Node | Isi |
 |---|---|
@@ -62,7 +77,7 @@ deterministik, tanpa model, tanpa kuota).
 | AI Agent | Tools Agent; prompt = pesan pengguna, system message dari API, maks 8 iterasi; error model → lanjut ke finish (`failed`) |
 | Model combo (9Router) | OpenAI Chat Model, Responses API **off**, model `ai-sales` (combo 9Router) |
 | Memory (Postgres) | `agent_memory.chat_history`, session `wa:<principal_id>` (bukan nomor HP), 6 pesan terakhir, dihapus setelah 7 hari |
-| Tool resolve_entity / diagnose / rank_districts / rank_regencies / stock / target | HTTP Request Tool → `/internal/v1/agent-tools/<nama>`; tiket dikirim n8n di header `X-Agent-Ticket` (model tidak pernah melihatnya); error API dikembalikan ke model sebagai JSON |
+| Tool resolve_entity / diagnose / rank_districts / rank_regencies / stock / target / report | HTTP Request Tool → `/internal/v1/agent-tools/<nama>`; tiket dikirim n8n di header `X-Agent-Ticket` (model tidak pernah melihatnya); error API dikembalikan ke model sebagai JSON |
 | Agent finish | `POST /internal/v1/agent/finish`: hapus ID teknis, ubah Markdown ke format WhatsApp, **setiap angka harus ada di hasil tool giliran ini** (kalau tidak → jawaban template dari data tool), tautan grafik untuk diagnosis |
 
 Kuota (tabel `telco.chat_quota_policy`, reset 00.00 WIB, 1 pesan = 1 kesempatan, retry n8n tidak dihitung dua kali):
@@ -75,8 +90,7 @@ Kuota (tabel `telco.chat_quota_policy`, reset 00.00 WIB, 1 pesan = 1 kesempatan,
 | Head of Region | 20 |
 | Tanpa jabatan (admin/viewer) | 0 |
 
-Kuota habis → tidak memanggil model: "stok", "target", "peringkat", dan "kenapa omzet … turun" dijawab format standar dari
-tool; selain itu dikirim daftar perintah tanpa AI. Bila model gagal dan belum ada tool yang terpanggil, kuota dikembalikan.
+Kuota habis → model tidak dipanggil; balasan berisi daftar perintah cepat sesuai jabatan (tetap gratis). Bila model gagal dan belum ada tool yang terpanggil, kuota dikembalikan.
 Ubah batas (role ops): `UPDATE telco.chat_quota_policy SET daily_limit=5,updated_at=now() WHERE level='sales';`
 
 ## Queue mode

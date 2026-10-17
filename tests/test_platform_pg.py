@@ -295,7 +295,7 @@ def test_draft_confirm_idempotent_and_expiry(login, admin_conn):
     s6 = login(S(51))
     d = s6.post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 51, 'lines': [
         {'sku': 'SIM-NOVA-8', 'quantity': 3}, {'sku': 'BAL-NOVA-IDR', 'quantity': 100000}]}).json()
-    assert 'Balas YA ' + d['confirm_code'] in d['summary'] and 'satuan tidak dijumlahkan' in d['summary']
+    assert 'Balas YA ' + d['confirm_code'] in d['summary'] and 'tidak dijumlahkan' not in d['summary']
     a = s6.post(f"/v1/transactions/drafts/{d['draft_id']}/confirm", json={'confirmation_event_id': 'test:confirm-1'})
     b = s6.post(f"/v1/transactions/drafts/{d['draft_id']}/confirm", json={'confirmation_event_id': 'test:confirm-2'})
     assert a.status_code == 200 and b.json()['idempotent_replay'] and len(a.json()['lines']) == 2

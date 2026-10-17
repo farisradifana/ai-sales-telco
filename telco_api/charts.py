@@ -2,6 +2,7 @@
 JSON). Shared via short-lived HMAC-signed URLs bound to evidence_id + principal."""
 import hmac
 import time
+from decimal import ROUND_HALF_UP, Decimal
 from html import escape
 
 from . import errors
@@ -35,35 +36,70 @@ def waterfall_points(e: dict) -> list[dict]:
     return pts
 
 
+def short_rp(value) -> str:
+    """Compact rupiah for chart labels: Rp2,2 jt / Rp990 rb / Rp1,25 M (exact value stays in the SVG <title>)."""
+    v = dec(value)
+    sign, a = ('-' if v < 0 else ''), abs(v)
+    for unit, div in (('M', Decimal(10) ** 9), ('jt', Decimal(10) ** 6), ('rb', Decimal(10) ** 3)):
+        if a >= div:
+            q = (a / div).quantize(Decimal('0.1') if a / div < 100 else Decimal('1'), rounding=ROUND_HALF_UP)
+            return f"{sign}Rp{str(q).replace('.', ',').removesuffix(',0')} {unit}"
+    return f'{sign}{rupiah(a)}'
+
+
+def _pct(r0, r1) -> str:
+    r0, r1 = dec(r0), dec(r1)
+    if r0 == 0:
+        return 'baru' if r1 > 0 else '0%'
+    v = ((r1 - r0) / r0 * 100).quantize(Decimal('1'))
+    return f"{'+' if v > 0 else ''}{v}%".replace('-', '−')
+
+
 def render_waterfall(e: dict) -> str:
-    pts = waterfall_points(e)
-    w, h, left, top, bottom = 760, 380, 230, 50, 30
-    running, bars = 0, []
-    for p in pts:
-        if p['kind'] == 'total':
-            start, end = 0, p['value']
-            running = p['value']
-        else:
-            start, end = running, running + p['value']
-            running = end
-        bars.append((p, start, end))
-    hi = max([max(b[1], b[2]) for b in bars] + [1])
-    lo = min([min(b[1], b[2]) for b in bars] + [0])
-    span = (hi - lo) or 1
-    bar_h = (h - top - bottom) / len(bars)
-    sx = lambda v: left + float((dec(v) - lo) / span) * (w - left - 20)
-    title = f"{'Sell-out' if e['channel'] == 'sell_out' else 'Sell-in'} {e.get('entity', {}).get('name', '')}: " \
-            f"{e['baseline_label']} → {e['current_label']}"
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" role="img" aria-label="{escape(title)}">',
-           '<style>text{font:12px system-ui,sans-serif;fill:#1f2937}.t{font-weight:600;font-size:14px}</style>',
-           f'<rect width="{w}" height="{h}" fill="#ffffff"/>', f'<text class="t" x="12" y="24">{escape(title)}</text>']
-    for i, (p, a, b) in enumerate(bars):
-        y = top + i * bar_h
-        x0, x1 = sorted((sx(a), sx(b)))
-        color = '#2563eb' if p['kind'] == 'total' else ('#dc2626' if p['value'] < 0 else '#16a34a')
-        out.append(f'<text x="8" y="{y + bar_h * .62:.1f}">{escape(p["label"][:34])}</text>')
-        out.append(f'<rect x="{x0:.1f}" y="{y + 4:.1f}" width="{max(1.0, x1 - x0):.1f}" height="{bar_h - 8:.1f}" fill="{color}"/>')
-        out.append(f'<text x="{x1 + 4:.1f}" y="{y + bar_h * .62:.1f}">{escape(rupiah(p["value"]))}</text>')
-    out.append(f'<text x="8" y="{h - 8}">Dekomposisi akuntansi, bukan sebab · '
-               f'{"PROVISIONAL" if not e.get("data_ready") else "final"}</text></svg>')
+    """Field-friendly comparison chart (name kept for the endpoints): per product, grey bar = comparison period,
+    blue bar = current period, coloured change on the left; big up/down summary on top. Every number comes from the
+    evidence; exact rupiah values are kept in <title> tooltips so the SVG stays traceable to the JSON."""
+    drivers = sorted(e.get('drivers', []), key=lambda d: dec(d['delta_idr']))
+    b_lbl, c_lbl = e['baseline_label'], e['current_label']
+    base, cur, delta = dec(e['revenue_baseline_idr']), dec(e['revenue_current_idr']), dec(e['delta_idr'])
+    ch = 'Sell-out' if e['channel'] == 'sell_out' else 'Sell-in'
+    name = e.get('entity', {}).get('name', '')
+    w, left, bar_x, bar_w, row_h, top = 900, 24, 330, 420, 66, 150
+    h = top + row_h * max(1, len(drivers)) + 70
+    hi = max([dec(d['r0']) for d in drivers] + [dec(d['r1']) for d in drivers] + [Decimal(1)])
+    sx = lambda v: max(2.0, float(dec(v) / hi) * bar_w)  # noqa: E731
+    up = delta >= 0
+    tone = '#15803d' if up else '#b91c1c'
+    head = f"{'Naik' if up else 'Turun'} {short_rp(abs(delta))} ({_pct(base, cur)})"
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" role="img" aria-label="{escape(ch)} {escape(name)}">',
+           '<style>text{font-family:system-ui,Segoe UI,sans-serif;fill:#111827}.s{font-size:15px}.m{font-size:13px;fill:#4b5563}'
+           '.t{font-size:22px;font-weight:700}.b{font-size:26px;font-weight:700}.p{font-size:16px;font-weight:600}</style>',
+           f'<rect width="{w}" height="{h}" fill="#ffffff"/>',
+           f'<text class="t" x="{left}" y="38">{escape(ch)} {escape(name)}</text>',
+           f'<text class="s" x="{left}" y="64">{escape(c_lbl)} dibanding {escape(b_lbl)}</text>',
+           f'<text class="b" x="{left}" y="104" style="fill:{tone}">{"▲" if up else "▼"} {escape(head)}'
+           f'<title>{escape(rupiah(delta))}</title></text>',
+           f'<text class="s" x="{left}" y="130">Total: {escape(short_rp(base))} → {escape(short_rp(cur))}'
+           f'<title>{escape(rupiah(base))} → {escape(rupiah(cur))}</title></text>']
+    for i, d in enumerate(drivers):
+        y = top + i * row_h
+        dd = dec(d['delta_idr'])
+        col = '#15803d' if dd > 0 else '#b91c1c' if dd < 0 else '#4b5563'
+        arrow = '▲' if dd > 0 else '▼' if dd < 0 else '•'
+        out.append(f'<line x1="{left}" x2="{w - left}" y1="{y - 8}" y2="{y - 8}" stroke="#e5e7eb"/>')
+        out.append(f'<text class="p" x="{left}" y="{y + 16}">{escape(d["product"].replace("Fiktif ", "")[:34])}</text>')
+        out.append(f'<text class="s" x="{left}" y="{y + 40}" style="fill:{col};font-weight:600">{arrow} {escape(short_rp(dd))} '
+                   f'({_pct(d["r0"], d["r1"])})<title>{escape(rupiah(dd))}</title></text>')
+        for j, (key, fill, lbl) in enumerate((('r0', '#9ca3af', b_lbl), ('r1', '#2563eb', c_lbl))):
+            by = y + 2 + j * 24
+            out.append(f'<rect x="{bar_x}" y="{by}" width="{sx(d[key]):.1f}" height="20" rx="3" fill="{fill}">'
+                       f'<title>{escape(lbl)}: {escape(rupiah(d[key]))}</title></rect>')
+            out.append(f'<text class="m" x="{bar_x + sx(d[key]) + 8:.1f}" y="{by + 15}">{escape(short_rp(d[key]))}</text>')
+    ly = h - 40
+    out.append(f'<rect x="{left}" y="{ly - 12}" width="14" height="14" rx="2" fill="#9ca3af"/>'
+               f'<text class="m" x="{left + 20}" y="{ly}">{escape(b_lbl)} (pembanding)</text>')
+    out.append(f'<rect x="{left + 250}" y="{ly - 12}" width="14" height="14" rx="2" fill="#2563eb"/>'
+               f'<text class="m" x="{left + 270}" y="{ly}">{escape(c_lbl)} (sekarang)</text>')
+    note = 'Data belum lengkap — angka sementara' if not e.get('data_ready') else 'Perubahan omzet per produk (bukan penyebab)'
+    out.append(f'<text class="m" x="{left}" y="{h - 14}">{escape(note)}</text></svg>')
     return ''.join(out)

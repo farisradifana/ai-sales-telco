@@ -202,7 +202,7 @@
       "parameters": {
         "mode": "expression",
         "numberOutputs": 3,
-        "output": "={{ ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
+        "output": "={{ $json.intent.startsWith('cmd_') ? 2 : ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
         "options": {}
       }
     },
@@ -317,7 +317,7 @@
     },
     {
       "id": "note-sales",
-      "name": "Catatan 02 · Input penjualan (tanpa AI, tanpa kuota)",
+      "name": "Catatan 02 · Input sell-in (tanpa AI, tanpa kuota)",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -325,7 +325,7 @@
         260
       ],
       "parameters": {
-        "content": "## 02 · Input penjualan (tanpa AI, tanpa kuota)\nDraft penjualan → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.",
+        "content": "## 02 · Input sell-in (tanpa AI, tanpa kuota)\n\"OUT-0001 SIM-NOVA-8 5\" → draft sell-in → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.",
         "color": 4,
         "width": 780,
         "height": 240
@@ -779,11 +779,55 @@
     },
     {
       "id": "agent-13",
-      "name": "AI · Tool target",
+      "name": "AI · Tool report",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
         1310,
+        850
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "telcoApiService",
+          "name": "TELCO API service token"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Laporan baku (bulan data lengkap terakhir, cakupan pengguna): sell_in = target/realisasi/achievement/per produk/progres tim; sell_out = per produk; rank_outlets; rank_districts (TM ke atas); rank_regencies (HoS/HoR). Pertumbuhan vs 1/2/3 bulan lalu.",
+        "descriptionType": "manual",
+        "method": "POST",
+        "url": "http://api:8000/internal/v1/agent-tools/report",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Ticket",
+              "value": "={{ $('AI · Agent start').item.json.ticket }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: $fromAI('kind', 'sell_in, sell_out, rank_outlets, rank_districts, atau rank_regencies', 'string') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "agent-14",
+      "name": "AI · Tool target",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
         850
       ],
       "credentials": {
@@ -833,7 +877,7 @@
       "parameters": {
         "content": "## 03 · AI Agent – bahasa natural (kuota chat per jabatan)\nAgent start (cek kuota harian: Sales/TM 3, HoB 5, HoS 10, HoR 20; tiket satu giliran) → AI Agent (model combo 9Router, memory Postgres, tool analitik ber-tiket) → Agent finish (verifikasi angka vs hasil tool, hapus ID teknis, tautan grafik) → balas. Kuota habis → jawaban format standar tanpa AI.",
         "color": 6,
-        "width": 1580,
+        "width": 1730,
         "height": 500
       }
     },
@@ -932,7 +976,7 @@
     },
     {
       "id": "note-other",
-      "name": "Catatan 01b · Perintah lain (STOP/MULAI TARGET)",
+      "name": "Catatan 01b · Perintah cepat tanpa AI (tanpa kuota)",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -940,7 +984,7 @@
         1040
       ],
       "parameters": {
-        "content": "## 01b · Perintah lain (STOP/MULAI TARGET)\nOpt-in / opt-out pengingat target harian dan pesan non-teks. Tanpa AI.",
+        "content": "## 01b · Perintah cepat tanpa AI (tanpa kuota)\nmenu, stok saya, sell in (target & achievement), sell out, peringkat outlet / kecamatan (TM+) / kabupaten (HoS+), STOP/MULAI TARGET, pesan non-teks.",
         "color": 7,
         "width": 780,
         "height": 240
@@ -1126,7 +1170,7 @@
               "id": "c",
               "name": "channel",
               "type": "string",
-              "value": "sell_out"
+              "value": "sell_in"
             },
             {
               "id": "a",
@@ -1720,6 +1764,17 @@
       ]
     },
     "AI · Tool stock": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI · AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI · Tool report": {
       "ai_tool": [
         [
           {

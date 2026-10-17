@@ -202,7 +202,7 @@
       "parameters": {
         "mode": "expression",
         "numberOutputs": 3,
-        "output": "={{ ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
+        "output": "={{ $json.intent.startsWith('cmd_') ? 2 : ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
         "options": {}
       }
     },

@@ -19,6 +19,19 @@ RANK = re.compile(r'kecamatan mana|peringkat|ranking', re.I)
 RANK_REGENCY = re.compile(r'(kabupaten|kab/kota|kota) mana|(peringkat|ranking) (kabupaten|kab|kota)', re.I)
 OPT_OUT = re.compile(r'^\s*STOP\s+TARGET\s*$', re.I)
 OPT_IN = re.compile(r'^\s*MULAI\s+TARGET(\s+(SELL[- ]?IN|SELL[- ]?OUT))?\s*$', re.I)
+_END = r'\s*[.!?]*\s*$'
+COMMANDS = [
+    ('cmd_menu', re.compile(r'^\s*(menu|bantuan|help|perintah)' + _END, re.I)),
+    ('cmd_stock', re.compile(r'^\s*(cek\s+)?(stok|stock)(\s+(saya|ku|aku))?' + _END, re.I)),
+    ('cmd_sell_in', re.compile(r'^\s*(cek\s+|laporan\s+)?sell[- ]?in' + _END, re.I)),
+    ('cmd_sell_out', re.compile(r'^\s*(cek\s+|laporan\s+)?sell[- ]?out' + _END, re.I)),
+    ('cmd_rank_outlets', re.compile(r'^\s*(peringkat|ranking|rank)\s+outlet' + _END, re.I)),
+    ('cmd_rank_districts', re.compile(r'^\s*(peringkat|ranking|rank)\s+kecamatan' + _END, re.I)),
+    ('cmd_rank_regencies', re.compile(r'^\s*(peringkat|ranking|rank)\s+(kabupaten|kab|kota|kab/kota|kabupaten/kota)' + _END, re.I)),
+]
+_SKU = r'(?:SIM|VCR|BAL)-[A-Z0-9-]+'
+QUICK_LINE = re.compile(rf'({_SKU})\s*[x×:=]?\s*(\d[\d.]*)?', re.I)
+QUICK_SALE = re.compile(rf'^\s*(?:(catat|input|jual|sell[- ]?in|sell[- ]?out)\s+)?((?:OUT)-\d{{1,6}})\s+((?:{_SKU}(?:\s*[x×:=]?\s*\d[\d.]*)?[\s,;]*)+)$', re.I)
 SALE_VERB = re.compile(r'^\s*(catat|input|jual|sellin|sell-in|sell in|sellout|sell-out|sell out)\b', re.I)
 
 
@@ -47,12 +60,25 @@ def parse(text: str | None) -> Intent:
     if m:
         ch = 'sell_in' if m.group(2) and 'IN' in m.group(2).upper() else 'sell_out'
         return Intent('target_opt_in', {'channel': ch})
+    for name, rx in COMMANDS:  # exact quick commands: fixed reports, no model, no quota
+        if rx.match(t):
+            return Intent(name)
+    m = QUICK_SALE.match(t)
+    if m:  # "OUT-0001 SIM-NOVA-8 5[, VCR-NOVA-3 2]": WhatsApp input is always sell-in (quantity defaults to 1)
+        if m.group(1) and re.match(r'sell[- ]?out', m.group(1), re.I):
+            return Intent('sales_input', {}, 'Input lewat WhatsApp hanya untuk sell-in (sales → outlet). Contoh: OUT-0001 SIM-NOVA-8 5')
+        pairs = [(s.upper(), _qty(q) if q else 1) for s, q in QUICK_LINE.findall(m.group(3))]
+        if any(q is None for _, q in pairs):
+            return Intent('sales_input', {'channel': 'sell_in'}, 'Jumlah harus bilangan bulat positif (PCS atau rupiah saldo).')
+        return Intent('sales_input', {'channel': 'sell_in', 'outlet_code': m.group(2).upper(),
+                                      'lines': [{'sku': s, 'quantity': q} for s, q in pairs]})
     channel = 'sell_in' if CHANNEL_IN.search(t) else 'sell_out' if CHANNEL_OUT.search(t) else None
     lines = [(s.upper(), _qty(q)) for s, q in SKU_RE.findall(t)]
     outlet = OUTLET_RE.search(t)
     if SALE_VERB.match(t) and lines:
-        if channel is None:
-            return Intent('sales_input', {'lines': lines}, 'Sebutkan channel: SELLIN (sales→outlet) atau SELLOUT (outlet→pelanggan).')
+        if channel == 'sell_out':
+            return Intent('sales_input', {}, 'Input lewat WhatsApp hanya untuk sell-in (sales → outlet). Contoh: OUT-0001 SIM-NOVA-8 5')
+        channel = 'sell_in'
         if not outlet:
             return Intent('sales_input', {'channel': channel, 'lines': lines}, 'Sebutkan kode outlet, contoh OUT-0001.')
         if any(q is None for _, q in lines):
@@ -84,5 +110,5 @@ def parse(text: str | None) -> Intent:
             return Intent('insight', {'query': 'Jawa Timur', 'scope': 'province', 'channel': channel or 'sell_out'})
         return Intent('insight', {'channel': channel or 'sell_out'},
                       'Outlet, kecamatan atau kabupaten/kota mana? Sebutkan kode, misal OUT-0001 atau "Kabupaten Madiun".')
-    return Intent('help', clarification=('Format: "SELLIN OUT-0001 SIM-NOVA-8 5" / "SELLOUT OUT-0001 BAL-NOVA-IDR 100000", '
-                                         '"stok", "target sell-in", "kenapa omzet OUT-0001 turun?", lalu "apa yang harus dilakukan?".'))
+    return Intent('help', clarification=('Ketik *menu* untuk perintah cepat: "stok saya", "sell in", "sell out", "peringkat outlet", '
+                                         'atau input sell-in "OUT-0001 SIM-NOVA-8 5".'))

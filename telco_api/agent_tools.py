@@ -5,15 +5,25 @@ Every call carries an opaque one-turn `ticket`; the API maps it to the principal
 deliberately NOT exposed to the model."""
 from datetime import datetime, timedelta, timezone
 
+from typing import Literal
+
 from pydantic import Field
 
-from . import analytics, errors, evidence
+from . import analytics, errors, evidence, reports
 from .schemas import ConversationKey, DiagnoseRequest, RankRequest, ResolveRequest, StockRequest, Strict, TargetRequest
 from .security import Principal, load_principal, new_ticket, ticket_hash
 
 
 class GetEvidenceArgs(Strict):
     evidence_id: str = Field(pattern=r'^[0-9a-f-]{36}$')
+
+
+class ReportArgs(Strict):
+    kind: Literal['sell_in', 'sell_out', 'rank_outlets', 'rank_districts', 'rank_regencies']
+
+
+REPORTS = {'sell_in': reports.sell_in, 'sell_out': reports.sell_out, 'rank_outlets': reports.rank_outlets,
+           'rank_districts': reports.rank_districts, 'rank_regencies': reports.rank_regencies}
 
 
 TOOLS = {
@@ -23,6 +33,9 @@ TOOLS = {
     'rank_regencies': (RankRequest, 'Peringkat kabupaten/kota yang seluruh kecamatannya diizinkan untuk principal ini.'),
     'stock': (StockRequest, 'Stok per akun (sales/outlet) dan satuan; tidak menjumlahkan PCS dengan IDR.'),
     'target': (TargetRequest, 'Realisasi vs target harian sales pada satu channel.'),
+    'report': (ReportArgs, 'Laporan baku bulan data lengkap terakhir dalam cakupan pengguna: sell_in (target, realisasi, achievement, '
+               'per produk, progres tim), sell_out (per produk), rank_outlets, rank_districts (TM ke atas), rank_regencies (HoS/HoR); '
+               'pertumbuhan vs 1/2/3 bulan lalu.'),
     'resolve_entity': (ResolveRequest, 'Cari outlet/kecamatan/kab-kota/provinsi dalam cakupan izin; nama ambigu butuh klarifikasi.'),
 }
 DEFAULT_ALLOWED = list(TOOLS)
@@ -78,6 +91,11 @@ def execute(db, ticket: str, name: str, arguments: dict) -> dict:
         return db.write(q)
     if name == 'resolve_entity':
         return analytics.resolve_entity(db, p, args)
+    if name == 'report':
+        out = REPORTS[args.kind](db, p, corr)
+        db.write(lambda conn: conn.execute('UPDATE telco.agent_turn SET evidence_ids=array_append(evidence_ids,%s::uuid) WHERE ticket_hash=%s',
+                                           (out['evidence_id'], ticket_hash(ticket))))
+        return out
     fn = {'diagnose': analytics.diagnose, 'rank_districts': analytics.rank_districts, 'rank_regencies': analytics.rank_regencies,
           'stock': analytics.stock,
           'target': analytics.target}[name]

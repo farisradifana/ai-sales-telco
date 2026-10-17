@@ -54,6 +54,9 @@ AGENT_TOOLS = {
               'PCS dan saldo IDR tidak dijumlahkan.',
               "account: $fromAI('account', 'self (stok saya) atau outlet', 'string', 'self'), "
               "outlet_id: $fromAI('outlet_id', 'Wajib bila account outlet: entity_id outlet dari resolve_entity', 'number', 0) || null"),
+    'report': ('Laporan baku (bulan data lengkap terakhir, cakupan pengguna): sell_in = target/realisasi/achievement/per produk/progres tim; '
+               'sell_out = per produk; rank_outlets; rank_districts (TM ke atas); rank_regencies (HoS/HoR). Pertumbuhan vs 1/2/3 bulan lalu.',
+               "kind: $fromAI('kind', 'sell_in, sell_out, rank_outlets, rank_districts, atau rank_regencies', 'string')"),
     'target': ('Realisasi vs target harian sales (milik pengguna) pada satu channel.',
                "channel: $fromAI('channel', 'sell_in atau sell_out', 'string', 'sell_in'), "
                "target_date: $fromAI('target_date', 'Opsional YYYY-MM-DD; kosong = hari ini', 'string', '') || null"),
@@ -116,10 +119,10 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
              {'id': 'm', 'name': 'message_id', 'type': 'string', 'value': "={{ $('Event').first().json.message_id }}"},
              {'id': 'i', 'name': 'intent', 'type': 'string', 'value': '={{ $json.name }}'}]}, 'options': {}}},
         {'id': 'route', 'name': 'Route', 'type': 'n8n-nodes-base.switch', 'typeVersion': 3.2, 'position': [1100, -100],
-         # Deterministic (free, no model): sales input + YA/BATAL, STOP/MULAI TARGET, empty/non-text. Everything else is a
-         # natural-language request for the AI Agent (counts against the daily chat quota).
+         # Deterministic (free, no model): sell-in input + YA/BATAL, quick commands (menu, stok saya, sell in, sell out,
+         # peringkat ...), STOP/MULAI TARGET, empty/non-text. Everything else is natural language for the AI Agent (quota).
          'parameters': {'mode': 'expression', 'numberOutputs': 3,
-                        'output': "={{ ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
+                        'output': "={{ $json.intent.startsWith('cmd_') ? 2 : ({sales_input:0, confirm:0, cancel:0, target_opt_in:2, target_opt_out:2, unsupported:2})[$json.intent] ?? 1 }}",
                         'options': {}}},
         {'id': 'sales', 'name': '02 Sales input', 'type': 'n8n-nodes-base.executeWorkflow', 'typeVersion': 1.2, 'position': [1340, -300],
          'parameters': {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'telco02salesinput'},
@@ -177,7 +180,7 @@ def build(api: str, model_id: str = 'ai-sales') -> dict:
          'parameters': {'mode': 'manual', 'includeOtherFields': False, 'assignments': {'assignments': [
              {'id': 's', 'name': 'scope', 'type': 'string', 'value': 'province'},
              {'id': 'e', 'name': 'entity_id', 'type': 'number', 'value': 1},  # Provinsi Jawa Timur
-             {'id': 'c', 'name': 'channel', 'type': 'string', 'value': 'sell_out'},
+             {'id': 'c', 'name': 'channel', 'type': 'string', 'value': 'sell_in'},
              {'id': 'a', 'name': 'start', 'type': 'string', 'value': "={{ $now.setZone('Asia/Jakarta').minus({days: 30}).toISODate() }}"},
              {'id': 'b', 'name': 'end', 'type': 'string', 'value': "={{ $now.setZone('Asia/Jakarta').toISODate() }}"}]}, 'options': {}}},
         {**http('Export CSV', [440, 0], '/v1/exports/sales.csv', api, method='GET', cred='recap'),
@@ -286,14 +289,15 @@ LANES = [  # key, title, description, sticky color (n8n 1..7), active by default
     ('router', '01 · Pesan masuk WhatsApp (router)',
      'Event dari API ingress (signature sudah diverifikasi) → klaim → kenali niat → arahkan ke jalur di bawah. '
      'Hanya provider + message_id yang lewat; akun pengirim ditentukan API.', 5, True),
-    ('sales', '02 · Input penjualan (tanpa AI, tanpa kuota)',
-     'Draft penjualan → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.', 4, True),
+    ('sales', '02 · Input sell-in (tanpa AI, tanpa kuota)',
+     '"OUT-0001 SIM-NOVA-8 5" → draft sell-in → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.', 4, True),
     ('agent', '03 · AI Agent – bahasa natural (kuota chat per jabatan)',
      'Agent start (cek kuota harian: Sales/TM 3, HoB 5, HoS 10, HoR 20; tiket satu giliran) → AI Agent (model combo 9Router, '
      'memory Postgres, tool analitik ber-tiket) → Agent finish (verifikasi angka vs hasil tool, hapus ID teknis, tautan grafik) → balas. '
      'Kuota habis → jawaban format standar tanpa AI.', 6, True),
-    ('other', '01b · Perintah lain (STOP/MULAI TARGET)',
-     'Opt-in / opt-out pengingat target harian dan pesan non-teks. Tanpa AI.', 7, True),
+    ('other', '01b · Perintah cepat tanpa AI (tanpa kuota)',
+     'menu, stok saya, sell in (target & achievement), sell out, peringkat outlet / kecamatan (TM+) / kabupaten (HoS+), '
+     'STOP/MULAI TARGET, pesan non-teks.', 7, True),
     ('target', '05 · Pengingat target harian (NONAKTIF)',
      'Jam kerja WIB, hanya yang opt-in, sekali per hari. Aktifkan setelah template WhatsApp Utility disetujui Meta.', 1, False),
     ('outbox', '06 · Pengirim pesan keluar (outbox)',
