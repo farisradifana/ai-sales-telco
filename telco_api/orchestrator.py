@@ -87,6 +87,8 @@ class Pipeline:
         if name in QUICK:  # fixed-format reports: no model, no quota
             if name == 'cmd_menu':
                 return {'next': 'reply', 'intent': name, 'text': reports.menu_text(self.db, p)}
+            if name == 'cmd_products':
+                return {'next': 'reply', 'intent': name, 'text': reports.products_text(self.db)}
             if name == 'cmd_stock':
                 if p.sales_id is None:
                     return {'next': 'reply', 'intent': name, 'text': 'Stok hanya dipegang akun sales. Ketik *sell in* atau *sell out* '
@@ -223,7 +225,7 @@ class Pipeline:
         return {'status': 'completed', 'outbox_id': r['outbox_id'], 'out_of_order': c.get('out_of_order')}
 
 
-QUICK = {'cmd_menu': None, 'cmd_stock': None,
+QUICK = {'cmd_menu': None, 'cmd_stock': None, 'cmd_products': None,
          'cmd_sell_in': (reports.sell_in, reports.sell_in_text), 'cmd_sell_out': (reports.sell_out, reports.sell_out_text),
          'cmd_rank_outlets': (reports.rank_outlets, reports.rank_outlets_text),
          'cmd_rank_districts': (reports.rank_districts, reports.rank_area_text),

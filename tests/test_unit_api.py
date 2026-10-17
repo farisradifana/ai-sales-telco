@@ -102,7 +102,7 @@ def test_waterfall_reconciles_to_delta():
     ('kenapa omzet OUT-0001 turun?', 'insight'), ('apa yang harus dilakukan?', 'follow_up'),
     ('solusinya?', 'follow_up'), ('stok saya', 'cmd_stock'), ('target sell-in hari ini', 'target'),
     ('Sell in', 'cmd_sell_in'), ('sell-out', 'cmd_sell_out'), ('peringkat outlet', 'cmd_rank_outlets'),
-    ('Peringkat kecamatan?', 'cmd_rank_districts'), ('peringkat kabupaten', 'cmd_rank_regencies'), ('menu', 'cmd_menu'),
+    ('Peringkat kecamatan?', 'cmd_rank_districts'), ('peringkat kabupaten', 'cmd_rank_regencies'), ('menu', 'cmd_menu'), ('list produk', 'cmd_products'), ('Daftar produk?', 'cmd_products'),
     ('OUT-0001 SIM-NOVA-8 5', 'sales_input'), ('outlet mana yang stock nya paling rendah?', 'stock'),
     ('outlet mana yang sell in nya paling bagus?', 'help'),
     ('STOP TARGET', 'target_opt_out'), ('kecamatan mana yang turun?', 'rank_districts'),

@@ -72,7 +72,7 @@ def test_quick_commands_are_free_and_short_sell_in_posts(client, settings, clone
     from telco_api.chat_agent import quota_status
     h, p = svc(settings), org['sales']
     used = quota_status(db, p)['used']
-    for text, expect in (('menu', 'Perintah cepat'), ('stok saya', 'Stok yang Anda pegang'), ('sell in', 'Achievement'),
+    for text, expect in (('menu', 'list produk'), ('list produk', 'SIM-NOVA-8* – Perdana Nova 8GB 30 Hari · Rp22.500 / Rp25.000'), ('stok saya', 'Stok yang Anda pegang'), ('sell in', 'Achievement'),
                          ('sell out', 'Per produk'), ('peringkat outlet', 'Peringkat outlet'),
                          ('peringkat kecamatan', 'hanya untuk Territory Manager')):
         ref = send(client, settings, clone_db, p, text)

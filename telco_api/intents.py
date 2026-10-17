@@ -22,6 +22,7 @@ OPT_IN = re.compile(r'^\s*MULAI\s+TARGET(\s+(SELL[- ]?IN|SELL[- ]?OUT))?\s*$', r
 _END = r'\s*[.!?]*\s*$'
 COMMANDS = [
     ('cmd_menu', re.compile(r'^\s*(menu|bantuan|help|perintah)' + _END, re.I)),
+    ('cmd_products', re.compile(r'^\s*(list|daftar|katalog)\s+(produk|product|barang)' + _END, re.I)),
     ('cmd_stock', re.compile(r'^\s*(cek\s+)?(stok|stock)(\s+(saya|ku|aku))?' + _END, re.I)),
     ('cmd_sell_in', re.compile(r'^\s*(cek\s+|laporan\s+)?sell[- ]?in' + _END, re.I)),
     ('cmd_sell_out', re.compile(r'^\s*(cek\s+|laporan\s+)?sell[- ]?out' + _END, re.I)),

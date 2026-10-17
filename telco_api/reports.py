@@ -378,13 +378,37 @@ def rank_area_text(e: dict) -> str:
     return '\n'.join(out)
 
 
+def products_text(db) -> str:
+    """Product catalogue with the SKU to type and today's price policy (sell-in = price to outlet, sell-out = to customer)."""
+    def q(conn):
+        return conn.execute('''SELECT p.sku,p.name,p.category,p.stock_unit,
+              max(pp.unit_price) FILTER(WHERE pp.channel='sell_in'),max(pp.unit_price) FILTER(WHERE pp.channel='sell_out'),
+              max(pp.max_discount_pct) FILTER(WHERE pp.channel='sell_out')
+            FROM telco.product p LEFT JOIN telco.price_policy pp ON pp.product_id=p.id
+              AND (now() AT TIME ZONE 'Asia/Jakarta')::date>=pp.valid_from AND (now() AT TIME ZONE 'Asia/Jakarta')::date<pp.valid_to
+            GROUP BY p.id ORDER BY CASE p.category WHEN 'PERDANA' THEN 1 WHEN 'VOUCHER' THEN 2 ELSE 3 END,p.id''').fetchall()
+    out, cat = ['*Daftar produk*', 'Format: SKU – nama · harga sell-in (ke outlet) / sell-out (ke pelanggan)'], None
+    for sku, name, category, unit, si, so, disc in db.read(q):
+        if category != cat:
+            cat = category
+            out += ['', f"*{category.title()}*"]
+        name = name.replace('Fiktif ', '')
+        if unit == 'IDR':
+            out.append(f"- *{sku}* – {name} · per Rp1 saldo: {rupiah(si) if si is not None else '–'} / {rupiah(so) if so is not None else '–'}")
+        else:
+            d = f" (diskon maks {dec(disc).normalize():f}%)" if disc and dec(disc) > 0 else ''
+            out.append(f"- *{sku}* – {name} · {rupiah(si) if si is not None else '–'} / {rupiah(so) if so is not None else '–'}{d}")
+    out += ['', 'Input sell-in: OUT-0001 SIM-NOVA-8 5 (saldo: jumlah dalam rupiah, mis. BAL-NOVA-IDR 100000)']
+    return '\n'.join(out)
+
+
 def menu_text(db, p: Principal, head: str | None = None) -> str:
     level = db.read(lambda conn: profile(conn, p))['level']
     lines = ([head, ''] if head else []) + ['*Perintah cepat (tanpa AI, tidak memakai kuota):*']
     if p.role == 'sales':
         lines += ['- *stok saya*', '- *OUT-0001 SIM-NOVA-8 5* → input sell-in (outlet, produk, jumlah), lalu balas YA <kode>']
     lines += ['- *sell in* → target, realisasi, achievement, per produk', '- *sell out* → sell-out per produk',
-              '- *peringkat outlet*']
+              '- *peringkat outlet*', '- *list produk* → SKU dan harga']
     if level in DISTRICT_LEVELS:
         lines.append('- *peringkat kecamatan*')
     if level in REGENCY_LEVELS:
@@ -394,4 +418,4 @@ def menu_text(db, p: Principal, head: str | None = None) -> str:
 
 
 __all__ = ['sell_in', 'sell_out', 'rank_outlets', 'rank_districts', 'rank_regencies', 'sell_in_text', 'sell_out_text',
-           'rank_outlets_text', 'rank_area_text', 'menu_text', 'growth_txt']
+           'rank_outlets_text', 'rank_area_text', 'menu_text', 'products_text', 'growth_txt']
