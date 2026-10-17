@@ -84,6 +84,20 @@ Jalankan `cloudflared tunnel --config .local/cloudflared/telco-wa.yml run telco-
 `PUBLIC_BASE_URL=https://telco-wa.<domain>`, lalu Callback URL Meta `https://telco-wa.<domain>/webhooks/whatsapp` (cukup sekali).
 Instalasi PC ini: tunnel `telco-wa`, hostname `telco-wa.farisradifana.my.id`.
 
+### C3. Nyala otomatis saat Windows login
+
+`scripts/windows/telco-startup.vbs` (disalin ke folder Startup sebagai `telco-sales-ai.vbs`; buka dengan Win+R → `shell:startup`)
+menjalankan `scripts/windows/telco_startup.sh` di Git Bash **tanpa jendela**. Urutan: PostgreSQL :55432 → 9Router :20128
+(`--tray --no-browser`; matikan dengan `TELCO_START_ROUTER=0` bila 9Router sudah autostart sendiri) → API :8000 (LIVE,
+`PUBLIC_BASE_URL=https://telco-wa.farisradifana.my.id`) → edge :8089 → tunnel `telco-wa` → n8n :5688. Setelah itu watchdog
+mengecek tiap 30 detik dan menyalakan ulang yang mati; layanan yang prosesnya masih hidup tidak dijalankan dua kali.
+
+- Log: `.local/startup.log` (+ log per layanan di `.local/`). Hitungan normal: semua `OK` ±1 menit; workflow n8n aktif ±3 menit
+  setelah login (`OK n8n workflows active (telco-inbound HTTP 403)`). Pesan WA yang masuk sebelum itu diproses ulang lewat outbox.
+- Hentikan semua: `bash scripts/windows/telco_stop.sh` (9Router tetap jalan; `--all` ikut menghentikannya).
+- Nonaktifkan autostart: hapus `telco-sales-ai.vbs` dari folder Startup.
+- Syarat: Windows tidak sleep dan user login (folder Startup berjalan saat logon, bukan saat boot tanpa login).
+
 n8n (workflow 01–04, 06) dan Hermes harus berjalan seperti E2E lokal (`docs/RUNBOOK.md` bagian 7).
 
 ## D. Uji
