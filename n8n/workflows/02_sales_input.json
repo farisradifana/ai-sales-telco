@@ -108,6 +108,147 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
+    },
+    {
+      "id": "posted",
+      "name": "Tercatat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ ($json.sheet_rows || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "rows",
+      "name": "Baris Rekap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $('Act').first().json.sheet_rows.map((r) => ({ json: r }));"
+      }
+    },
+    {
+      "id": "rekap",
+      "name": "Tambah ke tab Rekap",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {},
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Rekap"
+        }
+      }
+    },
+    {
+      "id": "logrow",
+      "name": "Baris log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $('Act').first().json.sheet_log.map((r) => ({ json: r }));"
+      }
+    },
+    {
+      "id": "info",
+      "name": "Log ke tab Info",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "googleSheetsRecap",
+          "name": "Google Sheets recap"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {},
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Info"
+        }
+      }
     }
   ],
   "connections": {
@@ -129,6 +270,11 @@
             "node": "Reply",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Tercatat?",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -138,6 +284,51 @@
         [
           {
             "node": "Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tercatat?": {
+      "main": [
+        [
+          {
+            "node": "Baris Rekap",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Baris Rekap": {
+      "main": [
+        [
+          {
+            "node": "Tambah ke tab Rekap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tambah ke tab Rekap": {
+      "main": [
+        [
+          {
+            "node": "Baris log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baris log": {
+      "main": [
+        [
+          {
+            "node": "Log ke tab Info",
             "type": "main",
             "index": 0
           }

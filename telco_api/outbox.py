@@ -32,6 +32,22 @@ def enqueue(conn, principal_id: str, kind: str, payload: dict, idempotency_key: 
     return conn.execute('SELECT id FROM telco.outbox WHERE idempotency_key=%s', (idempotency_key,)).fetchone()[0]
 
 
+def _hold_follow_up(db, row: dict, worker_id: str) -> bool:
+    """A follow-up message (key '<reply key>:menu') waits while its parent reply is still queued or retrying.
+    Released without spending an attempt; rows of one batch run in id order, so normally the parent was just sent."""
+    parent = row['idempotency_key'][:-len(':menu')]
+
+    def tx(conn):
+        r = conn.execute('SELECT state FROM telco.outbox WHERE idempotency_key=%s', (parent,)).fetchone()
+        if not r or r[0] not in ('pending', 'sending'):
+            return False
+        # Due again at the next dispatch run (every ~20 s); re-held each time until the parent is sent or failed for good.
+        conn.execute('''UPDATE telco.outbox SET state='pending',attempts=attempts-1,next_attempt_at=now(),
+            lease_owner=NULL,lease_expires_at=NULL WHERE id=%s AND lease_owner=%s''', (row['id'], worker_id))
+        return True
+    return db.write(tx)
+
+
 def claim(conn, limit: int, lease_seconds: int, worker_id: str) -> list[dict]:
     rows = conn.execute('''UPDATE telco.outbox o SET state='sending',lease_owner=%s,lease_expires_at=now()+make_interval(secs=>%s),
             attempts=o.attempts+1
@@ -150,6 +166,8 @@ def dispatch_batch(db, settings: Settings, wa: WhatsAppSender, n8n: N8nDispatche
     vault = IdentityVault(settings)
     stats = {'claimed': len(rows), 'sent': 0, 'retry': 0, 'dead_letter': 0}
     for row in rows:
+        if row['idempotency_key'].endswith(':menu') and _hold_follow_up(db, row, worker_id):
+            continue  # the "Pilih Perintah" picker never overtakes the report it follows
         try:
             if row['kind'] == 'n8n_dispatch':
                 provider_id = n8n.send(row['payload'])

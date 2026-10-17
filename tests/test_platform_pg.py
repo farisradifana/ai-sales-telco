@@ -295,7 +295,7 @@ def test_draft_confirm_idempotent_and_expiry(login, admin_conn):
     s6 = login(S(51))
     d = s6.post('/v1/transactions/drafts', json={'channel': 'sell_in', 'outlet_id': 51, 'lines': [
         {'sku': 'SIM-NOVA-8', 'quantity': 3}, {'sku': 'BAL-NOVA-IDR', 'quantity': 100000}]}).json()
-    assert 'Balas YA ' + d['confirm_code'] in d['summary'] and 'tidak dijumlahkan' not in d['summary']
+    assert f"Balas *YA {d['confirm_code']}*" in d['summary'] and 'tidak dijumlahkan' not in d['summary']
     a = s6.post(f"/v1/transactions/drafts/{d['draft_id']}/confirm", json={'confirmation_event_id': 'test:confirm-1'})
     b = s6.post(f"/v1/transactions/drafts/{d['draft_id']}/confirm", json={'confirmation_event_id': 'test:confirm-2'})
     assert a.status_code == 200 and b.json()['idempotent_replay'] and len(a.json()['lines']) == 2
@@ -459,7 +459,7 @@ def test_wa_end_to_end_sale_insight_follow_up(app, settings, mocks, admin_conn):
     dispatch(c, settings)
     summary = mocks.wa_sent[-1]['text']['body']
     assert len(mocks.wa_sent) == sent_before + 1 and 'Konfirmasi SELL-IN OUT-0001' in summary
-    code = re.search(r'Balas YA ([A-F0-9]{6})', summary).group(1)
+    code = re.search(r'Balas \*YA ([A-F0-9]{6})\*', summary).group(1)
     assert admin_conn.execute("SELECT count(*) FROM telco.sell_in WHERE external_key LIKE 'DRF-%%' AND outlet_id=1").fetchone()[0] == 0
     # 2) confirmation -> posted atomically
     m2 = 'wamid.TEST.' + uuid.uuid4().hex

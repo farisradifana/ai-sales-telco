@@ -113,7 +113,7 @@ def summary_text(n: dict, code: str, ttl_min: int) -> str:
         else:
             saldo += q
     out.append(f"Total omzet {rupiah(total)} (fisik {int(pcs)} pcs; saldo {rupiah(saldo)} nominal).")
-    out.append(f"Balas YA {code} untuk posting atau BATAL {code} untuk membatalkan. Berlaku {ttl_min} menit.")
+    out.append(f"Balas *YA {code}* untuk posting atau *BATAL {code}* untuk membatalkan. Berlaku {ttl_min} menit.")
     return '\n'.join(out)
 
 

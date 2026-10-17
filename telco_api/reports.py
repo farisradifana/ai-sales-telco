@@ -444,17 +444,22 @@ def menu_picker(db, p: Principal) -> tuple[str, dict]:
     # The list header already shows "AI Sales Intelligence Telco" as the first line above this body.
     body = ('📋 *Menu perintah cepat*\nPilih salah satu di bawah\n(tanpa AI, tidak memakai kuota).\n\n'
             'Pertanyaan lain?\nKetik saja dengan bahasa biasa, dijawab asisten AI.')
+    picker_ = {'header': {'type': 'text', 'text': 'AI Sales Intelligence Telco'}, **picker(db, p, body, prof)}
+    return body, picker_
+
+
+def picker(db, p: Principal, body: str, prof: dict | None = None) -> dict:
+    """List message with the role's quick commands under any body text (button "Pilih Perintah")."""
+    prof = prof or db.read(lambda conn: profile(conn, p))
     rows = [{k: v[:72] if k == 'description' else v[:24] if k == 'title' else v for k, v in r.items()} for r in menu_rows(prof['level'], p.role)]
-    picker = {'type': 'list', 'header': {'type': 'text', 'text': 'AI Sales Intelligence Telco'}, 'body': {'text': body[:1024]},
-              'footer': {'text': 'Ketik "menu" kapan saja'},
-              'action': {'button': 'Pilih perintah', 'sections': [{'title': 'Perintah cepat', 'rows': rows[:10]}]}}
-    return body, picker
+    return {'type': 'list', 'body': {'text': body[:1024]}, 'footer': {'text': 'Ketik "menu" kapan saja'},
+            'action': {'button': 'Pilih Perintah', 'sections': [{'title': 'Perintah cepat', 'rows': rows[:10]}]}}
 
 
 def greeting(db, p: Principal) -> tuple[str, dict]:
     """Reply to "Halo": a short greeting with one "Menu" button (tapping it sends the id "menu" -> the list picker)."""
     prof = db.read(lambda conn: profile(conn, p))
-    body = (f"Halo, {prof['title']}! 👋\nSelamat datang di AI Sales Intelligence Telco.\n\n"
+    body = (f"Halo, *{prof['title']}*! 👋\nSelamat datang di AI Sales Intelligence Telco.\n\n"
             'Tekan *Menu* untuk melihat perintah cepat, atau langsung ketik pertanyaan Anda.')
     button = {'type': 'button', 'body': {'text': body[:1024]},
               'action': {'buttons': [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]}}

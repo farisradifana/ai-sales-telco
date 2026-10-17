@@ -89,11 +89,15 @@ def test_quick_commands_are_free_and_short_sell_in_posts(client, settings, clone
         client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
     summary = outbox_text(admin_conn, ref)
     assert 'Konfirmasi SELL-IN OUT-0001' in summary
-    code = re.search(r'Balas YA ([A-F0-9]{6})', summary).group(1)
+    code = re.search(r'Balas \*YA ([A-F0-9]{6})\* untuk posting atau \*BATAL [A-F0-9]{6}\*', summary).group(1)
     ref = send(client, settings, clone_db, p, f'YA {code}')
     for step in ('act', 'reply', 'complete'):
         client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
-    assert outbox_text(admin_conn, ref).startswith('Tercatat:')
+    done = outbox_text(admin_conn, ref)
+    assert done.startswith('Tercatat:') and 'Total *Rp' in done and '.00 IDR' not in done
+    act = admin_conn.execute("SELECT result->'steps'->'act' FROM telco.inbound_event WHERE message_id=%s", (ref['message_id'],)).fetchone()[0]
+    assert [r['SKU'] for r in act['sheet_rows']] == ['SIM-NOVA-8'] and act['sheet_rows'][0]['Kode Outlet'] == 'OUT-0001'
+    assert act['sheet_log'][0]['Keterangan'].startswith('Log input sell-in') and f'kode {code}' in act['sheet_log'][0]['Nilai']
     assert admin_conn.execute("SELECT status FROM telco.pending_action WHERE payload->>'confirm_code'=%s", (code,)).fetchone()[0] == 'posted'
 
 
@@ -170,7 +174,9 @@ def _post(client, settings, wa_from, message):
     h, ref = svc(settings), {'provider': 'whatsapp', 'message_id': mid}
     for step in ('claim', 'intent', 'act', 'reply', 'complete'):
         client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
-    client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
+    for _ in range(20):  # drain: other tests may have left messages queued ahead of ours
+        if client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h).json()['claimed'] == 0:
+            break
     return mid
 
 
@@ -184,7 +190,7 @@ def test_halo_sends_a_picker_and_a_tap_runs_the_command(app, client, settings, c
     used = quota_status(db, org['tm'])['used']
     _post(client, settings, num, {'type': 'text', 'text': {'body': 'Halo'}})
     hello = [m for m in mocks.wa_sent if m['to'] == num][-1]
-    assert hello['type'] == 'interactive' and hello['interactive']['type'] == 'button' and 'Halo, Territory Manager' in hello['interactive']['body']['text'] and 'AI Sales Intelligence Telco' in hello['interactive']['body']['text']
+    assert hello['type'] == 'interactive' and hello['interactive']['type'] == 'button' and 'Halo, *Territory Manager' in hello['interactive']['body']['text'] and 'AI Sales Intelligence Telco' in hello['interactive']['body']['text']
     assert hello['interactive']['action']['buttons'] == [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]
     _post(client, settings, num, {'type': 'interactive', 'interactive': {'type': 'button_reply', 'button_reply': {'id': 'menu', 'title': 'Menu'}}})
     msg = [m for m in mocks.wa_sent if m['to'] == num][-1]
@@ -195,5 +201,37 @@ def test_halo_sends_a_picker_and_a_tap_runs_the_command(app, client, settings, c
     assert all(len(r['title']) <= 24 and len(r.get('description', '')) <= 72 for r in rows) and len(rows) <= 10
     _post(client, settings, num, {'type': 'interactive', 'interactive': {'type': 'list_reply', 'list_reply': {'id': 'sell in', 'title': 'Sell in'}}})
     reply = [m for m in mocks.wa_sent if m['to'] == num][-1]
-    assert reply['type'] == 'text' and 'Achievement' in reply['text']['body'] and 'Progres tim' in reply['text']['body']
+    # Short report: the report itself is the body of a "Pilih Perintah" list message.
+    assert reply['type'] == 'interactive' and reply['interactive']['action']['button'] == 'Pilih Perintah'
+    assert 'Achievement' in reply['interactive']['body']['text'] and 'Progres tim' in reply['interactive']['body']['text']
+    assert 'Halo, *Territory Manager' in hello['interactive']['body']['text']  # role name in bold
     assert quota_status(db, org['tm'])['used'] == used  # picker and tapped commands never touch the AI quota
+
+
+def test_long_report_is_followed_by_a_picker(app, client, settings, clone_db, mocks):
+    """Reports longer than a list body (1024) go as text, then a separate "Pilih Perintah" message."""
+    from telco_api.identity import IdentityVault
+    num = '0099' + str(uuid.uuid4().int)[:8]
+    with psycopg.connect(clone_db['identity']) as c:
+        IdentityVault(settings).register(c, num, 'hor-35')
+    _post(client, settings, num, {'type': 'text', 'text': {'body': 'peringkat kabupaten'}})
+    last_two = [m for m in mocks.wa_sent if m['to'] == num][-2:]
+    assert last_two[0]['type'] == 'text' and 'Peringkat kabupaten' in last_two[0]['text']['body']
+    assert last_two[1]['type'] == 'interactive' and last_two[1]['interactive']['action']['button'] == 'Pilih Perintah'
+
+
+def test_picker_waits_for_its_report(app, client, settings, clone_db, mocks):
+    """If the report send fails transiently, the follow-up picker is held until the report goes out."""
+    from telco_api.identity import IdentityVault
+    num = '0099' + str(uuid.uuid4().int)[:8]
+    with psycopg.connect(clone_db['identity']) as c:
+        IdentityVault(settings).register(c, num, 'hor-35')
+    mocks.wa_fail.append(503)  # the report (first send of the batch for this number) fails once
+    _post(client, settings, num, {'type': 'text', 'text': {'body': 'peringkat kecamatan'}})
+    with psycopg.connect(clone_db['admin'], autocommit=True) as a:  # make the retry due now
+        a.execute("UPDATE telco.outbox SET next_attempt_at=now() WHERE state='pending' AND idempotency_key LIKE 'reply:whatsapp:wamid.PICK%%'")
+    h = svc(settings)
+    for _ in range(5):
+        client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
+    mine = [m for m in mocks.wa_sent if m['to'] == num]
+    assert [m['type'] for m in mine] == ['text', 'interactive']

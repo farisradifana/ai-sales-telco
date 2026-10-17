@@ -76,7 +76,7 @@ def main():
         return mid, raw, reply['text']['body']
 
     _, _, summary = step('sale_draft', 'SELLIN OUT-0001 SIM-NOVA-8 2')
-    code = re.search(r'Balas YA ([A-F0-9]{6})', summary).group(1)
+    code = re.search(r'Balas \*?YA ([A-F0-9]{6})', summary).group(1)
     step('sale_confirm', f'YA {code}')
     mid, raw, insight = step('insight', 'kenapa omzet OUT-0001 turun?')
     _, _, follow = step('follow_up', 'apa yang harus dilakukan?')

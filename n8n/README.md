@@ -61,7 +61,7 @@ Router mengirim ke AI Agent **semua pesan selain** perintah cepat berikut (deter
 | `menu` (atau tekan tombol Menu) | daftar pilihan interaktif (list message) sesuai jabatan; menekan baris = mengetik perintahnya | semua |
 | `cara input` | panduan input sell-in | Sales |
 | `stok saya` | stok per produk yang dipegang | Sales |
-| `OUT-0001 SIM-NOVA-8 5` (beberapa produk dipisah koma; jumlah kosong = 1) | draft **sell-in** → balas `YA <kode>` / `BATAL <kode>` | Sales |
+| `OUT-0001 SIM-NOVA-8 5` (beberapa produk dipisah koma; jumlah kosong = 1) | draft **sell-in** → balas `YA <kode>` / `BATAL <kode>`; setelah YA baris transaksi langsung ditambahkan ke tab **Rekap** dan log ke tab **Info** (snapshot 06:30 menulis ulang kedua tab) | Sales |
 | `sell in` | target, realisasi, achievement, per produk, vs bulan lalu, progres tim (bawahan langsung, terendah dulu), progres hari ini | semua |
 | `sell out` | sell-out per produk (pcs, omzet, pertumbuhan) | semua |
 | `list produk` | SKU + harga sell-in / sell-out + diskon maks; panduan baca & cara input hanya untuk Sales | semua |
@@ -70,6 +70,7 @@ Router mengirim ke AI Agent **semua pesan selain** perintah cepat berikut (deter
 | `peringkat kabupaten` | sama, per kabupaten/kota | HoS, HoR |
 | `MULAI/STOP TARGET` | pengingat target harian | semua |
 
+Setiap balasan perintah cepat membawa tombol **Pilih Perintah** (dalam satu pesan bila ≤1000 karakter, selain itu pesan kedua yang selalu menunggu laporannya terkirim).
 Periode laporan = bulan data lengkap terakhir (watermark); bulan penuh bila watermark di akhir bulan, selain itu month-to-date
 dengan pembanding rentang hari yang sama. Input lewat WhatsApp selalu **sell-in**; `SELLOUT …` ditolak dengan petunjuk.
 Kalimat bebas (mis. "outlet mana yang sell in nya paling bagus?") → AI Agent, yang juga punya tool `report` dengan laporan yang sama.

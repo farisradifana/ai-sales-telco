@@ -155,8 +155,36 @@ def build(api: str, model_id: str = 'ai-sales', fallback_model_id: str = 'ai-sal
             x += 220
         return wf(wid, name, ns, chain(names))
 
-    out['02_sales_input'] = sub('telco02salesinput', 'TELCO 02 Sales input (draft/confirm)',
-                                [('Act', '/internal/v1/events/act'), ('Reply', '/internal/v1/events/reply'), ('Complete', '/internal/v1/events/complete')])
+    sales = sub('telco02salesinput', 'TELCO 02 Sales input (draft/confirm)',
+                [('Act', '/internal/v1/events/act'), ('Reply', '/internal/v1/events/reply'), ('Complete', '/internal/v1/events/complete')])
+    # Posted sell-in (YA <kode>) -> append to the recap sheet right away: rows to tab Rekap, one log line to tab Info.
+    # Sheet errors never block the WhatsApp reply (continueRegularOutput); the 06:30 snapshot rewrites both tabs anyway.
+    sheet = {'authentication': 'oAuth2', 'resource': 'sheet', 'operation': 'append',
+             'documentId': {'__rl': True, 'mode': 'id', 'value': RECAP_SHEET_ID},
+             'columns': {'mappingMode': 'autoMapInputData', 'value': {}, 'matchingColumns': [], 'schema': []}, 'options': {}}
+    sales['nodes'] += [
+        {'id': 'posted', 'name': 'Tercatat?', 'type': 'n8n-nodes-base.if', 'typeVersion': 2.2, 'position': [440, 200],
+         'parameters': {'conditions': {'options': {'caseSensitive': True, 'typeValidation': 'loose', 'version': 2},
+                                       'conditions': [{'id': 'c1', 'leftValue': '={{ ($json.sheet_rows || []).length }}', 'rightValue': 0,
+                                                       'operator': {'type': 'number', 'operation': 'gt'}}], 'combinator': 'and'},
+                        'options': {}}},
+        {'id': 'rows', 'name': 'Baris Rekap', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [660, 200],
+         'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems',
+                        'jsCode': "return $('Act').first().json.sheet_rows.map((r) => ({ json: r }));"}},
+        {'id': 'rekap', 'name': 'Tambah ke tab Rekap', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [880, 200],
+         'credentials': CRED['sheets'], 'onError': 'continueRegularOutput',
+         'parameters': {**sheet, 'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Rekap'}}},
+        {'id': 'logrow', 'name': 'Baris log', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [1100, 200], 'executeOnce': True,
+         'parameters': {'language': 'javaScript', 'mode': 'runOnceForAllItems',
+                        'jsCode': "return $('Act').first().json.sheet_log.map((r) => ({ json: r }));"}},
+        {'id': 'info', 'name': 'Log ke tab Info', 'type': 'n8n-nodes-base.googleSheets', 'typeVersion': 4.5, 'position': [1320, 200],
+         'credentials': CRED['sheets'], 'onError': 'continueRegularOutput',
+         'parameters': {**sheet, 'sheetName': {'__rl': True, 'mode': 'name', 'value': 'Info'}}},
+    ]
+    sales['connections']['Act'] = {'main': [[{'node': 'Reply', 'type': 'main', 'index': 0}, {'node': 'Tercatat?', 'type': 'main', 'index': 0}]]}
+    sales['connections'].update({'Tercatat?': {'main': [[{'node': 'Baris Rekap', 'type': 'main', 'index': 0}], []]},
+                                 **chain(['Baris Rekap', 'Tambah ke tab Rekap', 'Baris log', 'Log ke tab Info'])})
+    out['02_sales_input'] = sales
     out['03_ai_agent'] = agent_workflow(api, model_id, sub_body, fallback_model_id)
 
     def sched(wid, name, rule, label, path, body):
@@ -300,7 +328,8 @@ LANES = [  # key, title, description, sticky color (n8n 1..7), active by default
      'Event dari API ingress (signature sudah diverifikasi) → klaim → kenali niat → arahkan ke jalur di bawah. '
      'Hanya provider + message_id yang lewat; akun pengirim ditentukan API.', 5, True),
     ('sales', '02 · Input sell-in (tanpa AI, tanpa kuota)',
-     '"OUT-0001 SIM-NOVA-8 5" → draft sell-in → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger.', 4, True),
+     '"OUT-0001 SIM-NOVA-8 5" → draft sell-in → ringkasan konfirmasi → balasan YA/BATAL → posting atomik ke stok & ledger '
+     '→ langsung ditambahkan ke Google Sheet (tab Rekap) + log di tab Info.', 4, True),
     ('agent', '03 · AI Agent – bahasa natural (kuota chat per jabatan)',
      'Agent start (cek kuota harian: Sales/TM 3, HoB 5, HoS 10, HoR 20; tiket satu giliran) → AI Agent (model combo 9Router, '
      'memory Postgres, tool analitik ber-tiket) → Agent finish (verifikasi angka vs hasil tool, hapus ID teknis, tautan grafik) → balas. '

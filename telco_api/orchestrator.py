@@ -5,6 +5,7 @@ from psycopg.types.json import Jsonb
 
 from . import analytics, charts, context, errors, intents, narrative, outbox, reports, transactions
 from .agent import Narrator
+from .money import dec, rupiah
 from .schemas import DiagnoseRequest, DraftRequest, RankRequest, ResolveRequest, SaleLine, StockRequest, TargetRequest
 from .security import load_principal
 
@@ -117,9 +118,12 @@ class Pipeline:
                 transactions.cancel_draft(self.db, p, draft_id, f'{provider}:{message_id}', corr)
                 return {'next': 'reply', 'text': f"Draft {slots['code']} dibatalkan; tidak ada yang diposting.", 'intent': name}
             r = transactions.confirm_draft(self.db, self.s, p, draft_id, f'{provider}:{message_id}', corr)
-            lines = '\n'.join(f"- {x['sku']} x{x['quantity']} → #{x['transaction_id']} ({x['net_revenue_idr']} IDR)" for x in r['lines'])
+            lines = '\n'.join(f"- {x['sku']} x{_qty(x['quantity'])} → #{x['transaction_id']} ({rupiah(x['net_revenue_idr'])})" for x in r['lines'])
             prefix = 'Sudah tercatat sebelumnya (tidak diposting ulang):' if r.get('idempotent_replay') else 'Tercatat:'
-            return {'next': 'reply', 'text': f"{prefix}\n{lines}\nTotal {r['total_net_revenue_idr']} IDR.", 'intent': name}
+            out = {'next': 'reply', 'text': f"{prefix}\n{lines}\nTotal *{rupiah(r['total_net_revenue_idr'])}*.", 'intent': name}
+            if not r.get('idempotent_replay'):  # n8n appends these to the Google Sheet (tab Rekap) and logs to tab Info
+                out.update(self._sheet_rows(p, r, slots['code']))
+            return out
         if name == 'insight':
             rr = analytics.resolve_entity(self.db, p, ResolveRequest(query=slots['query'], scope=slots.get('scope')))
             if rr['status'] != 'resolved':
@@ -166,6 +170,24 @@ class Pipeline:
                     'text': f"Pengingat target harian {'aktif untuk ' + ch.replace('_', '-') if on else 'dimatikan'}."}
         return {'next': 'reply', 'intent': name, 'text': it.get('clarification') or 'Perintah belum dikenali.'}
 
+    def _sheet_rows(self, p, r: dict, code: str) -> dict:
+        ids = [int(x['transaction_id']) for x in r['lines']]
+
+        def q(conn):
+            return conn.execute('''SELECT (s.occurred_at AT TIME ZONE 'Asia/Jakarta')::date,to_char(s.occurred_at AT TIME ZONE 'Asia/Jakarta','DD-MM-YYYY HH24:MI'),
+                o.code,o.name,pr.sku,pr.stock_unit,s.quantity,s.net_revenue,s.id FROM telco.sell_in s JOIN telco.outlet o ON o.id=s.outlet_id
+                JOIN telco.product pr ON pr.id=s.product_id WHERE s.id=ANY(%s) ORDER BY s.id''', (ids,)).fetchall()
+        rows = self.db.read(q)
+        if not rows:
+            return {}
+        sheet = [{'Tanggal (WIB)': str(d), 'Kode Outlet': oc, 'Nama Outlet': on, 'SKU': sku, 'Satuan': unit, 'Kuantitas': float(qty),
+                  'Omzet (IDR)': float(rev), 'Jumlah Transaksi Bersih': 1} for d, _, oc, on, sku, unit, qty, rev, _ in rows]
+        items = ', '.join(f"{sku} x{_qty(qty)} ({rupiah(rev)})" for _, _, _, _, sku, _, qty, rev, _ in rows)
+        log = [{'Keterangan': f"Log input sell-in {rows[0][1]} WIB",
+                'Nilai': f"{p.display_name} · {rows[0][2]} · {items} · total {rupiah(r['total_net_revenue_idr'])} · kode {code} · "
+                         f"transaksi #{', #'.join(str(x[8]) for x in rows)}"}]
+        return {'sheet_rows': sheet, 'sheet_log': log}
+
     def narrate(self, provider: str, message_id: str) -> dict:
         ev, hit = self._cached(provider, message_id, 'narrate')
         if hit:
@@ -199,11 +221,26 @@ class Pipeline:
         # Evidence ids are kept for audit in the outbox payload; they are not part of the user-facing text.
         eids = (self.narrate(provider, message_id).get('evidence_ids') if act.get('next') == 'narrate'
                 else [act['evidence_id']] if act.get('evidence_id') else act.get('evidence_ids') or [])
-        oid = self.db.write(lambda conn: outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text',
-                                                        {'text': text, 'preview_url': False, 'evidence_ids': eids,
-                                                         'reply_to': ev['identity_ref'],  # blind-index prefix of the sender
-                                                         **({'interactive': act['interactive']} if act.get('interactive') else {})},
-                                                        f'reply:{provider}:{message_id}', ev['correlation_id']))
+        base = {'preview_url': False, 'evidence_ids': eids, 'reply_to': ev['identity_ref']}  # reply_to: blind-index prefix of sender
+        interactive, follow_up = act.get('interactive'), None
+        if not interactive and _offers_menu(act):
+            # Quick-command replies end with a "Pilih Perintah" picker: inside the message when it fits a list body (1024),
+            # otherwise as a short second message right after the report.
+            p = self._principal(ev)
+            if len(text) <= 1000:
+                interactive = reports.picker(self.db, p, text)
+            else:
+                follow_up = reports.picker(self.db, p, 'Pilih perintah lain 👇')
+
+        def tx(conn):
+            oid = outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text',
+                                 {'text': text, **base, **({'interactive': interactive} if interactive else {})},
+                                 f'reply:{provider}:{message_id}', ev['correlation_id'])
+            if follow_up:
+                outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text', {'text': follow_up['body']['text'], **base, 'interactive': follow_up},
+                               f'reply:{provider}:{message_id}:menu', ev['correlation_id'])
+            return oid
+        oid = self.db.write(tx)
         return self._save(provider, message_id, 'reply', {'outbox_id': oid})
 
     def complete(self, provider: str, message_id: str) -> dict:
@@ -238,6 +275,16 @@ QUICK = {'cmd_greeting': None, 'cmd_menu': None, 'cmd_stock': None, 'cmd_product
          'cmd_rank_outlets': (reports.rank_outlets, reports.rank_outlets_text),
          'cmd_rank_districts': (reports.rank_districts, reports.rank_area_text),
          'cmd_rank_regencies': (reports.rank_regencies, reports.rank_area_text)}
+
+
+def _qty(q) -> str:
+    v = dec(q)
+    return f"{int(v):,}".replace(',', '.') if v == v.to_integral() else str(v)
+
+
+def _offers_menu(act: dict) -> bool:
+    intent = act.get('intent') or ''
+    return (intent.startswith('cmd_') and intent not in ('cmd_menu', 'cmd_greeting')) or act.get('source') == 'quota_exhausted'
 
 
 def _user_error(exc: errors.AppError) -> str:

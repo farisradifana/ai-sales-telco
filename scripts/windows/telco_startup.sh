@@ -74,7 +74,7 @@ start_n8n() {
   # The port opens minutes before workflows are activated; 404 = webhook not registered yet, 403 = active (needs auth).
   for _ in $(seq 1 120); do
     c=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:5688/webhook/telco-inbound)
-    [ "$c" != 404 ] && [ "$c" != 000 ] && { log "OK   n8n workflows active (telco-inbound HTTP $c)"; return 0; }
+    [ "$c" != 404 ] && [ "$c" != 503 ] && [ "$c" != 000 ] && { log "OK   n8n workflows active (telco-inbound HTTP $c)"; return 0; }
     sleep 5
   done
   log "WAIT n8n webhook telco-inbound not registered after 10 min (workflow published?)"
