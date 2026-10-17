@@ -103,6 +103,9 @@ class WhatsAppSender:
         body = {'messaging_product': 'whatsapp', 'recipient_type': 'individual', 'to': to, 'type': 'text',
                 'text': {'body': payload['text'][:4096], 'preview_url': bool(payload.get('preview_url'))},
                 'biz_opaque_callback_data': idempotency_key}
+        if payload.get('interactive'):  # list message (quick-command picker); a reply inside the 24h session window
+            body.pop('text')
+            body.update({'type': 'interactive', 'interactive': payload['interactive']})
         url = f"{self.s.wa_graph_base_url.rstrip('/')}/{self.s.wa_graph_version}/{self.s.wa_phone_number_id}/messages"
         try:
             r = self.client.post(url, json=body, headers={'Authorization': f'Bearer {self.s.wa_access_token.get_secret_value()}'})

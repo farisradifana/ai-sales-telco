@@ -21,7 +21,9 @@ OPT_OUT = re.compile(r'^\s*STOP\s+TARGET\s*$', re.I)
 OPT_IN = re.compile(r'^\s*MULAI\s+TARGET(\s+(SELL[- ]?IN|SELL[- ]?OUT))?\s*$', re.I)
 _END = r'\s*[.!?]*\s*$'
 COMMANDS = [
+    ('cmd_greeting', re.compile(r'^\s*hal+o+(\s+(min|kak|bot))?' + _END, re.I)),  # "Halo" -> greeting + Menu button
     ('cmd_menu', re.compile(r'^\s*(menu|bantuan|help|perintah)' + _END, re.I)),
+    ('cmd_input_help', re.compile(r'^\s*(cara\s+input|input\s+sell[- ]?in|bantuan\s+input)' + _END, re.I)),
     ('cmd_products', re.compile(r'^\s*(list|daftar|katalog)\s+(produk|product|barang)' + _END, re.I)),
     ('cmd_stock', re.compile(r'^\s*(cek\s+)?(stok|stock)(\s+(saya|ku|aku))?' + _END, re.I)),
     ('cmd_sell_in', re.compile(r'^\s*(cek\s+|laporan\s+)?sell[- ]?in' + _END, re.I)),

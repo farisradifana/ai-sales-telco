@@ -386,8 +386,9 @@ def rank_area_text(e: dict) -> str:
     return '\n'.join(out)
 
 
-def products_text(db) -> str:
-    """Product catalogue with the SKU to type and today's price policy (sell-in = price to outlet, sell-out = to customer)."""
+def products_text(db, p: Principal | None = None) -> str:
+    """Product catalogue for a phone screen: one short block per product (SKU to type, name, prices). The how-to-read and
+    how-to-input lines are only for the Sales role, which is the only role that posts sell-in."""
     def q(conn):
         return conn.execute('''SELECT p.sku,p.name,p.category,p.stock_unit,
               max(pp.unit_price) FILTER(WHERE pp.channel='sell_in'),max(pp.unit_price) FILTER(WHERE pp.channel='sell_out'),
@@ -395,19 +396,77 @@ def products_text(db) -> str:
             FROM telco.product p LEFT JOIN telco.price_policy pp ON pp.product_id=p.id
               AND (now() AT TIME ZONE 'Asia/Jakarta')::date>=pp.valid_from AND (now() AT TIME ZONE 'Asia/Jakarta')::date<pp.valid_to
             GROUP BY p.id ORDER BY CASE p.category WHEN 'PERDANA' THEN 1 WHEN 'VOUCHER' THEN 2 ELSE 3 END,p.id''').fetchall()
-    out, cat = ['*Daftar produk*', 'Format: SKU – nama · harga sell-in (ke outlet) / sell-out (ke pelanggan)'], None
+    sales = p is not None and p.role == 'sales'
+    rp = lambda v: rupiah(v) if v is not None else '–'  # noqa: E731
+    out = ['📦 *Daftar produk*']
+    if sales:
+        out += ['', '_SI = harga ke outlet (sell-in)_', '_SO = harga ke pelanggan (sell-out)_']
+    cat = None
     for sku, name, category, unit, si, so, disc in db.read(q):
         if category != cat:
             cat = category
-            out += ['', f"*{category.title()}*"]
-        name = name.replace('Fiktif ', '')
+            out += ([] if out[-1] == '' else ['']) + [f"*━ {category.title()} ━*"]
+        out.append(f"*{sku}*")
+        out.append(name.replace('Fiktif ', ''))
         if unit == 'IDR':
-            out.append(f"- *{sku}* – {name} · per Rp1 saldo: {rupiah(si) if si is not None else '–'} / {rupiah(so) if so is not None else '–'}")
+            out.append(f"SI {rp(si)} · SO {rp(so)} per Rp1 saldo" if sales else f"Sell-in {rp(si)} · Sell-out {rp(so)} per Rp1 saldo")
         else:
-            d = f" (diskon maks {dec(disc).normalize():f}%)" if disc and dec(disc) > 0 else ''
-            out.append(f"- *{sku}* – {name} · {rupiah(si) if si is not None else '–'} / {rupiah(so) if so is not None else '–'}{d}")
-    out += ['', 'Input sell-in: OUT-0001 SIM-NOVA-8 5 (saldo: jumlah dalam rupiah, mis. BAL-NOVA-IDR 100000)']
-    return '\n'.join(out)
+            d = f" · diskon ≤{dec(disc).normalize():f}%" if disc and dec(disc) > 0 else ''
+            out.append(f"SI {rp(si)} · SO {rp(so)}{d}" if sales else f"Sell-in {rp(si)} · Sell-out {rp(so)}{d}")
+        out.append('')
+    if sales:
+        out += ['✍️ *Cara input sell-in*', 'Ketik: kode outlet, SKU, jumlah', '`OUT-0001 SIM-NOVA-8 5`',
+                'Saldo dalam rupiah:', '`OUT-0001 BAL-NOVA-IDR 100000`']
+    return '\n'.join(out).rstrip()
+
+
+def menu_rows(level: str | None, role: str) -> list[dict]:
+    """Quick commands for this role. Row id = the command text the parser understands (a tap works like typing it)."""
+    rows = []
+    if role == 'sales':
+        rows.append({'id': 'stok saya', 'title': 'Stok saya', 'description': 'Stok per produk yang Anda pegang'})
+    rows += [{'id': 'sell in', 'title': 'Sell in', 'description': 'Target, realisasi, achievement, per produk'},
+             {'id': 'sell out', 'title': 'Sell out', 'description': 'Sell-out per produk dan pertumbuhan'},
+             {'id': 'peringkat outlet', 'title': 'Peringkat outlet', 'description': 'Outlet teratas sell-out dan sell-in'}]
+    if level in DISTRICT_LEVELS:
+        rows.append({'id': 'peringkat kecamatan', 'title': 'Peringkat kecamatan', 'description': 'SO & SI vs 1/2/3 bulan lalu'})
+    if level in REGENCY_LEVELS:
+        rows.append({'id': 'peringkat kabupaten', 'title': 'Peringkat kabupaten', 'description': 'SO & SI per kab/kota vs 1/2/3 bulan lalu'})
+    rows.append({'id': 'list produk', 'title': 'List produk', 'description': 'SKU dan harga'})
+    if role == 'sales':
+        rows.append({'id': 'cara input', 'title': 'Cara input sell-in', 'description': 'Format kirim penjualan ke outlet'})
+    return rows
+
+
+def menu_picker(db, p: Principal) -> tuple[str, dict]:
+    """WhatsApp list message: tap a row instead of typing. Limits: 10 rows, title 24, description 72, button 20, body 1024."""
+    prof = db.read(lambda conn: profile(conn, p))
+    body = ('📋 *Menu perintah cepat*\nPilih salah satu di bawah (tanpa AI, tidak memakai kuota).\n\n'
+            'Pertanyaan lain? Ketik saja dengan bahasa biasa, dijawab asisten AI.')
+    rows = [{k: v[:72] if k == 'description' else v[:24] if k == 'title' else v for k, v in r.items()} for r in menu_rows(prof['level'], p.role)]
+    picker = {'type': 'list', 'header': {'type': 'text', 'text': 'Asisten Penjualan TELCO'}, 'body': {'text': body[:1024]},
+              'footer': {'text': 'Ketik "menu" kapan saja'},
+              'action': {'button': 'Pilih perintah', 'sections': [{'title': 'Perintah cepat', 'rows': rows[:10]}]}}
+    return body, picker
+
+
+def greeting(db, p: Principal) -> tuple[str, dict]:
+    """Reply to "Halo": a short greeting with one "Menu" button (tapping it sends the id "menu" -> the list picker)."""
+    prof = db.read(lambda conn: profile(conn, p))
+    body = (f"Halo, {prof['title']}! 👋\nSelamat datang di Asisten Penjualan TELCO.\n\n"
+            'Tekan *Menu* untuk melihat perintah cepat, atau langsung ketik pertanyaan Anda.')
+    button = {'type': 'button', 'body': {'text': body[:1024]},
+              'action': {'buttons': [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]}}
+    return body, button
+
+
+def input_help_text(p: Principal) -> str:
+    if p.role != 'sales':
+        return 'Input sell-in dilakukan oleh akun Sales.'
+    return '\n'.join(['✍️ *Cara input sell-in*', '', 'Ketik: kode outlet, SKU, jumlah', '`OUT-0001 SIM-NOVA-8 5`', '',
+                      'Beberapa produk sekaligus (pisah koma):', '`OUT-0001 SIM-NOVA-8 5, VCR-NOVA-3 2`', '',
+                      'Saldo dalam rupiah:', '`OUT-0001 BAL-NOVA-IDR 100000`', '',
+                      'Lalu balas *YA <kode>* untuk posting atau *BATAL <kode>*.', 'SKU lengkap: pilih *List produk*.'])
 
 
 def menu_text(db, p: Principal, head: str | None = None) -> str:

@@ -22,12 +22,24 @@ class WAText(_Loose):
     body: str = Field(max_length=4096)
 
 
+class WAChoice(_Loose):
+    id: str = Field(max_length=200)
+    title: str | None = Field(None, max_length=100)
+
+
+class WAInteractive(_Loose):
+    type: str
+    list_reply: WAChoice | None = None
+    button_reply: WAChoice | None = None
+
+
 class WAMessage(_Loose):
     id: str = Field(min_length=6, max_length=160)
     from_: str = Field(alias='from', pattern=r'^\d{6,20}$')
     timestamp: str = Field(pattern=r'^\d{9,11}$')
     type: str
     text: WAText | None = None
+    interactive: WAInteractive | None = None
 
 
 class WAStatus(_Loose):
@@ -79,7 +91,11 @@ def verify_signature(s: Settings, raw: bytes, header: str | None) -> None:
 
 def normalize(msg: WAMessage) -> dict:
     """Message content WITHOUT the sender phone number. Non-text types are recorded but not interpreted."""
-    return {'type': msg.type, 'text': msg.text.body if msg.text else None,
+    text = msg.text.body if msg.text else None
+    choice = msg.interactive and (msg.interactive.list_reply or msg.interactive.button_reply)
+    if choice:  # a tapped quick-command row: its id is the command text (e.g. "sell in"), parsed like typed text
+        text = choice.id
+    return {'type': msg.type, 'text': text, **({'choice_title': choice.title} if choice else {}),
             'provider_ts': datetime.fromtimestamp(int(msg.timestamp), timezone.utc).isoformat()}
 
 

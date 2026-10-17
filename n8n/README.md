@@ -57,12 +57,14 @@ Router mengirim ke AI Agent **semua pesan selain** perintah cepat berikut (deter
 
 | Ketik | Isi balasan | Jabatan |
 |---|---|---|
-| `menu` | daftar perintah sesuai jabatan | semua |
+| `Halo` | sapaan + tombol **Menu** (pesan interaktif) | semua |
+| `menu` (atau tekan tombol Menu) | daftar pilihan interaktif (list message) sesuai jabatan; menekan baris = mengetik perintahnya | semua |
+| `cara input` | panduan input sell-in | Sales |
 | `stok saya` | stok per produk yang dipegang | Sales |
 | `OUT-0001 SIM-NOVA-8 5` (beberapa produk dipisah koma; jumlah kosong = 1) | draft **sell-in** → balas `YA <kode>` / `BATAL <kode>` | Sales |
 | `sell in` | target, realisasi, achievement, per produk, vs bulan lalu, progres tim (bawahan langsung, terendah dulu), progres hari ini | semua |
 | `sell out` | sell-out per produk (pcs, omzet, pertumbuhan) | semua |
-| `list produk` | SKU (untuk input) + harga sell-in / sell-out + diskon maks | semua |
+| `list produk` | SKU + harga sell-in / sell-out + diskon maks; panduan baca & cara input hanya untuk Sales | semua |
 | `peringkat outlet` | top 5 sell-out & sell-in (+3 terbawah bila >10 outlet) | semua |
 | `peringkat kecamatan` | SO & SI + pertumbuhan vs 1/2/3 bulan lalu; top 10 + 5 terbawah | TM, HoB, HoS, HoR |
 | `peringkat kabupaten` | sama, per kabupaten/kota | HoS, HoR |

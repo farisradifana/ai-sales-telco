@@ -85,10 +85,16 @@ class Pipeline:
         if it.get('clarification'):
             return {'next': 'reply', 'text': it['clarification'], 'intent': name}
         if name in QUICK:  # fixed-format reports: no model, no quota
+            if name == 'cmd_greeting':
+                body, button = reports.greeting(self.db, p)
+                return {'next': 'reply', 'intent': name, 'text': body, 'interactive': button}
             if name == 'cmd_menu':
-                return {'next': 'reply', 'intent': name, 'text': reports.menu_text(self.db, p)}
+                body, picker = reports.menu_picker(self.db, p)
+                return {'next': 'reply', 'intent': name, 'text': body, 'interactive': picker}
+            if name == 'cmd_input_help':
+                return {'next': 'reply', 'intent': name, 'text': reports.input_help_text(p)}
             if name == 'cmd_products':
-                return {'next': 'reply', 'intent': name, 'text': reports.products_text(self.db)}
+                return {'next': 'reply', 'intent': name, 'text': reports.products_text(self.db, p)}
             if name == 'cmd_stock':
                 if p.sales_id is None:
                     return {'next': 'reply', 'intent': name, 'text': 'Stok hanya dipegang akun sales. Ketik *sell in* atau *sell out* '
@@ -195,7 +201,8 @@ class Pipeline:
                 else [act['evidence_id']] if act.get('evidence_id') else act.get('evidence_ids') or [])
         oid = self.db.write(lambda conn: outbox.enqueue(conn, ev['principal_id'], 'whatsapp_text',
                                                         {'text': text, 'preview_url': False, 'evidence_ids': eids,
-                                                         'reply_to': ev['identity_ref']},  # blind-index prefix of the sender
+                                                         'reply_to': ev['identity_ref'],  # blind-index prefix of the sender
+                                                         **({'interactive': act['interactive']} if act.get('interactive') else {})},
                                                         f'reply:{provider}:{message_id}', ev['correlation_id']))
         return self._save(provider, message_id, 'reply', {'outbox_id': oid})
 
@@ -226,7 +233,7 @@ class Pipeline:
         return {'status': 'completed', 'outbox_id': r['outbox_id'], 'out_of_order': c.get('out_of_order')}
 
 
-QUICK = {'cmd_menu': None, 'cmd_stock': None, 'cmd_products': None,
+QUICK = {'cmd_greeting': None, 'cmd_menu': None, 'cmd_stock': None, 'cmd_products': None, 'cmd_input_help': None,
          'cmd_sell_in': (reports.sell_in, reports.sell_in_text), 'cmd_sell_out': (reports.sell_out, reports.sell_out_text),
          'cmd_rank_outlets': (reports.rank_outlets, reports.rank_outlets_text),
          'cmd_rank_districts': (reports.rank_districts, reports.rank_area_text),

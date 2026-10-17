@@ -72,7 +72,8 @@ def test_quick_commands_are_free_and_short_sell_in_posts(client, settings, clone
     from telco_api.chat_agent import quota_status
     h, p = svc(settings), org['sales']
     used = quota_status(db, p)['used']
-    for text, expect in (('menu', 'list produk'), ('list produk', 'SIM-NOVA-8* – Perdana Nova 8GB 30 Hari · Rp22.500 / Rp25.000'), ('stok saya', 'Stok yang Anda pegang'), ('sell in', 'Achievement'),
+    for text, expect in (('Halo', 'Tekan *Menu*'), ('menu', 'Menu perintah cepat'), ('list produk', '*SIM-NOVA-8*\nPerdana Nova 8GB 30 Hari\nSI Rp22.500 · SO Rp25.000'),
+                         ('cara input', 'OUT-0001 SIM-NOVA-8 5'), ('stok saya', 'Stok yang Anda pegang'), ('sell in', 'Achievement'),
                          ('sell out', 'Per produk'), ('peringkat outlet', 'Peringkat outlet'),
                          ('peringkat kecamatan', 'hanya untuk Territory Manager')):
         ref = send(client, settings, clone_db, p, text)
@@ -151,5 +152,48 @@ def test_reply_goes_to_the_sending_number(app, client, settings, clone_db, mocks
     for step in ('claim', 'intent', 'act', 'reply', 'complete'):
         client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
     client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
-    sent = [m for m in mocks.wa_sent if 'Perintah cepat' in m['text']['body'] and m['to'] in (older, newer)]
+    sent = [m for m in mocks.wa_sent if m['to'] in (older, newer)]
     assert sent and sent[-1]['to'] == older
+
+
+def _post(client, settings, wa_from, message):
+    import hashlib
+    import hmac
+    import json
+    import time
+    mid = 'wamid.PICK' + uuid.uuid4().hex[:12]
+    raw = json.dumps({'object': 'whatsapp_business_account', 'entry': [{'id': 'W', 'changes': [{'field': 'messages', 'value': {
+        'messaging_product': 'whatsapp', 'metadata': {'phone_number_id': '000000000000000'},
+        'messages': [{'from': wa_from, 'id': mid, 'timestamp': str(int(time.time())), **message}]}}]}]}, separators=(',', ':')).encode()
+    sig = 'sha256=' + hmac.new(settings.wa_app_secret.get_secret_value().encode(), raw, hashlib.sha256).hexdigest()
+    assert client.post('/webhooks/whatsapp', content=raw, headers={'X-Hub-Signature-256': sig, 'Content-Type': 'application/json'}).status_code == 200
+    h, ref = svc(settings), {'provider': 'whatsapp', 'message_id': mid}
+    for step in ('claim', 'intent', 'act', 'reply', 'complete'):
+        client.post(f'/internal/v1/events/{step}', json=ref, headers=h)
+    client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
+    return mid
+
+
+def test_halo_sends_a_picker_and_a_tap_runs_the_command(app, client, settings, clone_db, org, mocks, db):
+    """'Halo' -> WhatsApp list message with the role's quick commands; tapping a row works exactly like typing it."""
+    from telco_api.chat_agent import quota_status
+    from telco_api.identity import IdentityVault
+    num = '0099' + str(uuid.uuid4().int)[:8]
+    with psycopg.connect(clone_db['identity']) as c:
+        IdentityVault(settings).register(c, num, org['tm'])
+    used = quota_status(db, org['tm'])['used']
+    _post(client, settings, num, {'type': 'text', 'text': {'body': 'Halo'}})
+    hello = [m for m in mocks.wa_sent if m['to'] == num][-1]
+    assert hello['type'] == 'interactive' and hello['interactive']['type'] == 'button' and 'Halo, Territory Manager' in hello['interactive']['body']['text']
+    assert hello['interactive']['action']['buttons'] == [{'type': 'reply', 'reply': {'id': 'menu', 'title': 'Menu'}}]
+    _post(client, settings, num, {'type': 'interactive', 'interactive': {'type': 'button_reply', 'button_reply': {'id': 'menu', 'title': 'Menu'}}})
+    msg = [m for m in mocks.wa_sent if m['to'] == num][-1]
+    assert msg['type'] == 'interactive' and msg['interactive']['type'] == 'list' and 'text' not in msg
+    rows = msg['interactive']['action']['sections'][0]['rows']
+    ids = [r['id'] for r in rows]
+    assert 'peringkat kecamatan' in ids and 'peringkat kabupaten' not in ids and 'stok saya' not in ids  # territory manager
+    assert all(len(r['title']) <= 24 and len(r.get('description', '')) <= 72 for r in rows) and len(rows) <= 10
+    _post(client, settings, num, {'type': 'interactive', 'interactive': {'type': 'list_reply', 'list_reply': {'id': 'sell in', 'title': 'Sell in'}}})
+    reply = [m for m in mocks.wa_sent if m['to'] == num][-1]
+    assert reply['type'] == 'text' and 'Achievement' in reply['text']['body'] and 'Progres tim' in reply['text']['body']
+    assert quota_status(db, org['tm'])['used'] == used  # picker and tapped commands never touch the AI quota

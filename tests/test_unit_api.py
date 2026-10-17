@@ -209,3 +209,17 @@ def test_chart_is_readable_and_traceable():
 def test_agent_reply_uses_whatsapp_markup():
     from telco_api.chat_agent import whatsapp_format
     assert whatsapp_format('## Ringkasan\n**Omzet:** Rp 1.000\n* poin\n__catatan__') == 'Ringkasan\n*Omzet:* Rp 1.000\n- poin\n_catatan_'
+
+
+def test_interactive_choice_becomes_command_text():
+    from telco_api.webhook import WAMessage, normalize
+    m = WAMessage.model_validate({'id': 'wamid.X1', 'from': '0099123', 'timestamp': '1792200000', 'type': 'interactive',
+                                  'interactive': {'type': 'list_reply', 'list_reply': {'id': 'peringkat outlet', 'title': 'Peringkat outlet'}}})
+    n = normalize(m)
+    assert n['text'] == 'peringkat outlet' and n['choice_title'] == 'Peringkat outlet'
+    assert intents.parse(n['text']).name == 'cmd_rank_outlets'
+    for t in ('Halo', 'halo kak', 'Hallo!'):
+        assert intents.parse(t).name == 'cmd_greeting', t
+    assert [intents.parse(t).name for t in ('menu', 'Menu', 'bantuan')] == ['cmd_menu'] * 3
+    assert intents.parse('selamat pagi').name not in ('cmd_greeting', 'cmd_menu')  # only "Halo" greets
+    assert intents.parse('halo, stok saya berapa?').name != 'cmd_menu'  # a real question still goes to the AI
