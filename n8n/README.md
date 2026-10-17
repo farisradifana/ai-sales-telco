@@ -11,7 +11,7 @@ diinterpolasi ke query (n8n hanya mengirim `provider` + `message_id` ke API).
 | 03_ai_agent | **AI Agent n8n** untuk pertanyaan bahasa natural: Agent start (kuota + tiket) → AI Agent (model combo 9Router, Postgres Chat Memory, 6 HTTP tool) → Agent finish (verifikasi angka) → reply → complete |
 | 05_daily_target | Cron WIB 07–20 Senin–Sabtu → `/internal/v1/targets/nudges` (opt-in, jam, hari kerja, idempotent per hari) |
 | 06_outbox_dispatcher | Tiap 20 detik → `/internal/v1/outbox/dispatch` (SKIP LOCKED, lease, retry+jitter, dead-letter) |
-| 07_spreadsheet_recap | 06:30 WIB → export CSV **sell-in** ter-scope (Provinsi Jawa Timur, 30 hari) → Google Sheet `1XAlDtkIA5gkdodi-fZip5x7Lbyri-YRk4dRJLOHPwRg` tab `Rekap` + `Info` |
+| 07_spreadsheet_recap | **Jadwal 06:30 dinonaktifkan** (data tetap di PostgreSQL; sheet diisi per transaksi oleh lane 02). Masih bisa dijalankan manual lewat node "Jalankan sekarang": export CSV **sell-in** 30 hari → tab `Rekap` + `Info` (menimpa isi kedua tab) |
 | 08_import_staging | Upload CSV admin → `/v1/imports` (hash, validasi, preview). Posting hanya setelah konfirmasi admin |
 
 Validasi signature WhatsApp (raw body HMAC), dedup dan penolakan signature invalid terjadi di **ingress API**
