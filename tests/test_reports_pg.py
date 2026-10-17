@@ -235,3 +235,16 @@ def test_picker_waits_for_its_report(app, client, settings, clone_db, mocks):
         client.post('/internal/v1/outbox/dispatch', json={'limit': 50, 'lease_seconds': 30, 'worker_id': 't'}, headers=h)
     mine = [m for m in mocks.wa_sent if m['to'] == num]
     assert [m['type'] for m in mine] == ['text', 'interactive']
+
+
+def test_chart_shows_sell_out_and_sell_in(app, client, settings, db, org):
+    """The chart link attached to a diagnosis covers both channels for the same entity and periods."""
+    from urllib.parse import urlparse
+    from telco_api import charts
+    from telco_api.schemas import DiagnoseRequest
+    from telco_api import analytics
+    p = principal(db, org['sales'])
+    e = analytics.diagnose(db, p, DiagnoseRequest(scope='outlet', entity_id=1, channel='sell_out'), 'corr_t')
+    u = urlparse(charts.paired_chart_url(db, settings, p, e, 'corr_t'))
+    svg = client.get(f'{u.path}?{u.query}').text
+    assert 'Sell-out Outlet Fiktif 0001' in svg and 'Sell-in Outlet Fiktif 0001' in svg and svg.count('(pembanding)') == 2

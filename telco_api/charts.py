@@ -56,6 +56,44 @@ def _pct(r0, r1) -> str:
 
 
 def render_waterfall(e: dict) -> str:
+    """One panel per channel: a 'chart_pair' evidence stacks sell-out then sell-in for the same entity and periods."""
+    panels = e.get('panels')
+    if not panels:
+        return _panel(e)[0]
+    parts, y = [], 0
+    for i, pe in enumerate(panels):
+        svg, h = _panel(pe)
+        if i:
+            parts.append(f'<rect x="0" y="{y}" width="900" height="10" fill="#f3f4f6"/>')
+            y += 10
+        parts.append(svg.replace('<svg xmlns="http://www.w3.org/2000/svg" ', f'<svg x="0" y="{y}" width="900" height="{h}" ', 1))
+        y += h
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 {y}" role="img" aria-label="Sell-out dan sell-in">{"".join(parts)}</svg>'
+
+
+def paired_chart_url(db, s, p, e: dict, correlation_id: str) -> str:
+    """Signed link to a chart with BOTH channels for the diagnosed entity and periods (the other channel is computed with
+    the same scope and dates, authorized again). Falls back to the single-channel chart if the other side is unavailable."""
+    from . import analytics, evidence
+    from .money import stringify_money
+    from .schemas import DiagnoseRequest
+    other = 'sell_in' if e['channel'] == 'sell_out' else 'sell_out'
+    try:
+        o = analytics.diagnose(db, p, DiagnoseRequest(scope=e['scope'], entity_id=e['entity_id'], channel=other,
+                                                      baseline_start=e['baseline']['start'], baseline_end=e['baseline']['end_exclusive'],
+                                                      current_start=e['current']['start'], current_end=e['current']['end_exclusive']),
+                               correlation_id)
+    except errors.AppError:
+        return signed_url(s, e['evidence_id'], p.principal_id)
+    so, si = (e, o) if e['channel'] == 'sell_out' else (o, e)
+    pair = {'tool': 'chart_pair', 'query_version': 'chart-pair-v1', 'scope': e['scope'], 'entity_id': e['entity_id'],
+            'source_evidence_ids': [so['evidence_id'], si['evidence_id']], 'panels': [so, si]}
+    stored = stringify_money(db.write(lambda conn: evidence.store(conn, p, 'chart_pair', {'evidence_ids': pair['source_evidence_ids']},
+                                                                  pair, correlation_id)))
+    return signed_url(s, stored['evidence_id'], p.principal_id)
+
+
+def _panel(e: dict) -> tuple[str, int]:
     """Field-friendly comparison chart (name kept for the endpoints): per product, grey bar = comparison period,
     blue bar = current period, coloured change on the left; big up/down summary on top. Every number comes from the
     evidence; exact rupiah values are kept in <title> tooltips so the SVG stays traceable to the JSON."""
@@ -102,4 +140,4 @@ def render_waterfall(e: dict) -> str:
                f'<text class="m" x="{left + 270}" y="{ly}">{escape(c_lbl)} (sekarang)</text>')
     note = 'Data belum lengkap — angka sementara' if not e.get('data_ready') else 'Perubahan omzet per produk (bukan penyebab)'
     out.append(f'<text class="m" x="{left}" y="{h - 14}">{escape(note)}</text></svg>')
-    return ''.join(out)
+    return ''.join(out), h

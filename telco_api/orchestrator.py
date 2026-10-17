@@ -201,7 +201,7 @@ class Pipeline:
         conv_key = f"wa:{ev['identity_ref']}"
         out = self.narrator.narrate(p, e, ev['message'].get('text') or '', conv_key, ev['correlation_id'])
         try:
-            out['chart_url'] = charts.signed_url(self.s, e['evidence_id'], p.principal_id)
+            out['chart_url'] = charts.paired_chart_url(self.db, self.s, p, e, ev['correlation_id'])
         except errors.AppError:
             out['chart_url'] = None
         ctx = context.create(self.db, p, e['evidence_id'], conv_key, 'whatsapp', self.s.context_ttl_hours)

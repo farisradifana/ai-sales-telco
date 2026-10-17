@@ -164,10 +164,10 @@ class ChatAgent:
             out, source, verified = self._fallback(evs), 'template' if evs else 'apology', bool(evs)
             if (failed or not clean) and not evs:  # the model never ran a tool: give the chat back
                 self._refund(p.principal_id, f'{provider}:{message_id}')
-        chart = next((e['evidence_id'] for tool, e in reversed(evs) if tool.startswith('diagnose')), None)
+        chart = next((e for tool, e in reversed(evs) if tool.startswith('diagnose')), None)
         if chart:
-            try:
-                out += f"\nGrafik (tautan privat, berlaku terbatas): {charts.signed_url(self.s, chart, p.principal_id)}"
+            try:  # sell-out and sell-in panels for the same entity and periods
+                out += f"\nGrafik sell-out & sell-in (tautan privat, berlaku terbatas): {charts.paired_chart_url(self.db, self.s, p, chart, ev['correlation_id'])}"
             except errors.AppError:
                 pass
         res = {'next': 'reply', 'intent': 'ai_chat', 'text': out[:MAX_REPLY_CHARS], 'source': source, 'verified': verified,
